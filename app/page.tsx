@@ -6,8 +6,17 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<any>(null);
 
-  const uploadFile = async () => {
-    if (!file) return;
+ const uploadFile = async () => {
+
+  console.log("uploadFile called");
+  console.log("Current file:", file);
+  try {
+    if (!file) {
+      console.log("No file selected");
+      return;
+    }
+
+    console.log("Uploading file...");
 
     const formData = new FormData();
     formData.append("file", file);
@@ -17,31 +26,42 @@ export default function Home() {
       body: formData,
     });
 
-    const data = await res.json();
-    setResult(data);
-  };
+    console.log("Response status:", res.status);
 
+    const data = await res.json();
+    console.log("Response data:", data);
+
+    setResult(data);
+  } catch (err) {
+    console.error("Upload failed:", err);
+  }
+};
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6">
       <div className="bg-white shadow-md rounded-xl p-6 w-full max-w-md">
         <h1 className="text-2xl font-bold mb-4">TabExplain</h1>
 
-        <input
-          type="file"
-          accept=".csv"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
-          className="mb-4"
-        />
+       <input
+  type="file"
+  accept=".csv"
+  onChange={(e) => {
+  const selectedFile = e.target.files?.[0] || null;
+  console.log("Selected file:", selectedFile);
+  setFile(selectedFile);
+}}
+  className="mb-4"
+/>
 
-        <button
-          onClick={uploadFile}
-          className="w-full bg-black text-white py-2 rounded hover:bg-gray-800"
-        >
-          Upload CSV
-        </button>
-
+    <button
+  onClick={() => {
+    console.log("BUTTON CLICKED");
+    uploadFile();
+  }}
+>
+  Upload
+</button>
         {result && (
-          <pre className="mt-4 text-sm bg-gray-100 p-3 rounded overflow-x-auto">
+          <pre className="mt-4 text-sm text-black bg-gray-100 p-3 rounded overflow-x-auto">
             {JSON.stringify(result, null, 2)}
           </pre>
         )}
