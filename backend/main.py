@@ -59,25 +59,65 @@ async def upload(file: UploadFile = File(...)):
                 return x
 
         numeric_summary = {}
+        iqr_outliers = {}
+
         for col in numeric_df.columns:
             s = numeric_df[col]
+
+            count = int(s.count())
+
+            q1 = (
+                to_jsonable(s.quantile(0.25, interpolation="linear"))
+                if count > 0
+                else None
+            )
+            q3 = (
+                to_jsonable(s.quantile(0.75, interpolation="linear"))
+                if count > 0
+                else None
+            )
+
+            # IQR outlier bounds using Tukey's rule (1.5 * IQR)
+            if q1 is None or q3 is None:
+                iqr = None
+                lower_bound = None
+                upper_bound = None
+                outlier_count = 0
+            else:
+                iqr_val = q3 - q1
+                lower_bound_val = q1 - 1.5 * iqr_val
+                upper_bound_val = q3 + 1.5 * iqr_val
+
+                # Count outliers excluding NaNs
+                outlier_count = int(
+                    ((s < lower_bound_val) | (s > upper_bound_val)).sum()
+                )
+
+                iqr = to_jsonable(iqr_val)
+                lower_bound = to_jsonable(lower_bound_val)
+                upper_bound = to_jsonable(upper_bound_val)
+
             stats = {
-                "count": int(s.count()),
+                "count": count,
                 "mean": to_jsonable(s.mean()),
                 "std": to_jsonable(s.std()),
                 "min": to_jsonable(s.min()),
-                "25%": to_jsonable(s.quantile(0.25, interpolation="linear"))
-                if s.count() > 0
-                else None,
-                "50%": to_jsonable(s.quantile(0.50, interpolation="linear"))
-                if s.count() > 0
-                else None,
-                "75%": to_jsonable(s.quantile(0.75, interpolation="linear"))
-                if s.count() > 0
-                else None,
+                "25%": q1,
+                "50%": to_jsonable(s.quantile(0.50, interpolation="linear")) if count > 0 else None,
+                "75%": q3,
                 "max": to_jsonable(s.max()),
             }
             numeric_summary[str(col)] = stats
+
+            iqr_outliers[str(col)] = {
+                "q1": q1,
+                "q3": q3,
+                "iqr": iqr,
+                "lower_bound": lower_bound,
+                "upper_bound": upper_bound,
+                "outlier_count": outlier_count,
+            }
+
 
         # Top 5 most frequent values for each categorical (non-numeric) column
         categorical_df = df.select_dtypes(exclude=["number"])
@@ -97,9 +137,11 @@ async def upload(file: UploadFile = File(...)):
             "dtypes": df.dtypes.astype(str).to_dict(),
             "missing_values": missing_values,
             "numeric_summary": numeric_summary,
+            "iqr_outliers": iqr_outliers,
             "correlation_matrix": correlation_matrix,
             "categorical_top_frequencies": categorical_top_frequencies,
         }
+
 
 
 
