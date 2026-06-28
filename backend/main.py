@@ -34,8 +34,18 @@ async def upload(file: UploadFile = File(...)):
                 "missing_percent": missing_percent,
             }
 
-        # Summary statistics for all numeric columns
+        # Summary statistics + correlation for all numeric columns
         numeric_df = df.select_dtypes(include=["number"])
+
+        # Correlation matrix (numeric columns only). If <2 numeric columns, return empty.
+        correlation_matrix = {}
+        if numeric_df.shape[1] >= 2:
+            corr = numeric_df.corr(numeric_only=True)
+            correlation_matrix = {
+                str(col): {str(c2): to_jsonable(val) for c2, val in corr.loc[col].items()}
+                for col in corr.columns
+            }
+
 
         def to_jsonable(x):
             # Convert pandas/numpy scalars to native Python types for JSON.
@@ -87,8 +97,10 @@ async def upload(file: UploadFile = File(...)):
             "dtypes": df.dtypes.astype(str).to_dict(),
             "missing_values": missing_values,
             "numeric_summary": numeric_summary,
+            "correlation_matrix": correlation_matrix,
             "categorical_top_frequencies": categorical_top_frequencies,
         }
+
 
 
     except Exception as e:
