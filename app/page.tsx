@@ -1,5 +1,6 @@
 "use client";
 
+//import { Black_And_White_Picture } from "next/font/google";
 import { useState } from "react";
 
 export default function Home() {
@@ -37,9 +38,9 @@ export default function Home() {
   }
 };
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6">
+    <main className="min-h-screen flex flex-col items-center justify-center text-black bg-gray-50 p-6">
       <div className="bg-white shadow-md rounded-xl p-6 w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-4">TabExplain</h1>
+        <h1 className="text-2xl font-bold mb-4">Tablyze</h1>
 
        <input
   type="file"
@@ -52,9 +53,9 @@ export default function Home() {
   className="mb-4"
 />
 
-    <button
+    <button 
   onClick={() => {
-    console.log("BUTTON CLICKED");
+    console.log("BUTTON CLICKED",);
     uploadFile();
   }}
 >
