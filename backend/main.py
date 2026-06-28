@@ -69,6 +69,17 @@ async def upload(file: UploadFile = File(...)):
             }
             numeric_summary[str(col)] = stats
 
+        # Top 5 most frequent values for each categorical (non-numeric) column
+        categorical_df = df.select_dtypes(exclude=["number"])
+        categorical_top_frequencies = {}
+        for col in categorical_df.columns:
+            s = categorical_df[col]
+            vc = s.value_counts(dropna=True).head(5)
+            categorical_top_frequencies[str(col)] = [
+                {"value": to_jsonable(idx), "count": int(cnt)}
+                for idx, cnt in vc.items()
+            ]
+
         return {
             "rows": df.shape[0],
             "columns": df.shape[1],
@@ -76,7 +87,9 @@ async def upload(file: UploadFile = File(...)):
             "dtypes": df.dtypes.astype(str).to_dict(),
             "missing_values": missing_values,
             "numeric_summary": numeric_summary,
+            "categorical_top_frequencies": categorical_top_frequencies,
         }
+
 
     except Exception as e:
         return {

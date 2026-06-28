@@ -1,5 +1,6 @@
 - [x] Update FastAPI /upload endpoint to return per-column missing value count and percent.
 - [x] Keep existing response fields unchanged (non-breaking).
-- [ ] (Optional) Suggest/implement Next.js rendering of missing-values as a table.
+- [x] Extend /upload to include top 5 most frequent values for each categorical (non-numeric) column using pandas.
+- [ ] Ensure response is JSON-serializable and includes both value and count per column.
 
 
