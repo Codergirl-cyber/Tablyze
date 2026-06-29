@@ -24,25 +24,20 @@ export default function Home() {
     }
 
     try {
-      setIsUploading(true);
-      console.log("Uploading file...");
+  setIsUploading(true);
+  console.log("Uploading file...");
 
-      const formData = new FormData();
-      formData.append("file", file);
+  const formData = new FormData();
+  formData.append("file", file);
 
-<<<<<<< HEAD
-     const API_URL =
-=======
-      const API_URL =
->>>>>>> 6df38932d8dbb4e4bb58f8d80453785338514708
+const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const res = await fetch(`${API_URL}/upload`, {
+    method: "POST",
+    body: formData,
+  });
 
-const res = await fetch(`${API_URL}/upload`, {
-  method: "POST",
-  body: formData,
-});
-
-      console.log("Response status:", res.status);
+  console.log("Response status:", res.status);
 
       const data = await res.json();
       console.log("Response data:", data);
