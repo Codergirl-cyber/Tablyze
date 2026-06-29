@@ -49,6 +49,37 @@ export default function Home() {
 
     const rows = typeof result.rows === "number" ? result.rows : undefined;
     const columns = typeof result.columns === "number" ? result.columns : undefined;
+
+    // Duplicate rows derived client-side (no backend changes).
+    // Uses row-wise JSON stringification of values.
+    // If the backend doesn't provide full row data, this falls back to 0.
+    const duplicateRows = (() => {
+      const maybeRowsData = (result as Record<string, unknown>).rows_data;
+      const rowObjects = Array.isArray(maybeRowsData) ? (maybeRowsData as unknown[]) : null;
+
+      if (!rowObjects || !rowObjects.length) return 0;
+
+      const normalized = rowObjects.map((r) => {
+        if (r && typeof r === "object") {
+          // stable stringify by sorting keys
+          const obj = r as Record<string, unknown>;
+          const keys = Object.keys(obj).sort();
+          const sorted: Record<string, unknown> = {};
+          for (const k of keys) sorted[k] = obj[k];
+          return JSON.stringify(sorted);
+        }
+        return JSON.stringify(r);
+      });
+
+      const counts = new Map<string, number>();
+      for (const s of normalized) counts.set(s, (counts.get(s) ?? 0) + 1);
+
+      let duplicates = 0;
+      for (const [, c] of counts) {
+        if (c > 1) duplicates += c - 1;
+      }
+      return duplicates;
+    })();
     const columnNames: string[] = Array.isArray(result.column_names)
       ? result.column_names
       : [];
@@ -82,12 +113,16 @@ export default function Home() {
     const missingValuesEntries = Object.entries(missingValues).map(([k, v]) => ({ column: k, missing: v }));
     const dataTypesEntries = Object.entries(dtypes).map(([k, v]) => ({ column: k, dtype: v }));
 
+    // KeyValueTable expects ReactNode values; cast derived rows for UI rendering.
+    const summaryRowsForTable = summaryRows as Array<Record<string, React.ReactNode>>;
+
     return {
       rows,
       columns,
       numericColumns,
       missingTotal,
-      summaryRows,
+      duplicateRows,
+      summaryRows: summaryRowsForTable,
       missingValuesEntries,
       dataTypesEntries,
       correlationMatrix: result.correlation_matrix || {},
@@ -136,10 +171,10 @@ export default function Home() {
               <div className="mt-6">
                 {/* Overview */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label="Rows" value={derived?.rows ?? "—"} hint="Total records" />
-                  <StatCard label="Columns" value={derived?.columns ?? "—"} hint="Total features" />
-                  <StatCard label="Numeric Columns" value={derived?.numericColumns ?? "—"} hint="Columns inferred as numeric" />
+                  <StatCard label="Total Rows" value={derived?.rows ?? "—"} hint="Total records" />
+                  <StatCard label="Total Columns" value={derived?.columns ?? "—"} hint="Total features" />
                   <StatCard label="Missing Values" value={derived?.missingTotal ?? "—"} hint="Total null/NaN count" />
+                  <StatCard label="Duplicate Rows" value={derived?.duplicateRows ?? "—"} hint="Rows duplicated across all columns" />
                 </div>
 
                 {/* Charts placeholders + table */}
