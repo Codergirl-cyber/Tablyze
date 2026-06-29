@@ -7,6 +7,8 @@ import SectionCard from "./components/SectionCard";
 import StatCard from "./components/StatCard";
 import MissingValuesBarChart from "./components/MissingValuesBarChart";
 import DataTypesPieChart from "./components/DataTypesPieChart";
+import CorrelationHeatmap from "./components/CorrelationHeatmap";
+
 
 
 export default function Home() {
@@ -219,15 +221,13 @@ export default function Home() {
                 <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <SectionCard
                     title="Correlation Heatmap"
-                    subtitle="Placeholder for numeric correlation matrix heatmap"
+                    subtitle="Correlation matrix for numeric columns"
                   >
-                    <div className="text-sm text-gray-600">
-                      Chart placeholder (no charts implemented yet). You can use
-                      <span className="font-mono text-gray-900 ml-1">correlation_matrix</span>.
-                    </div>
+                    <CorrelationHeatmap correlationMatrix={derived?.correlationMatrix as any} />
                   </SectionCard>
 
                   <SectionCard title="Summary Statistics" subtitle="Numeric columns summary">
+
                     <div className="text-sm text-gray-600">Table derived from <span className="font-mono text-gray-900">numeric_summary</span>.</div>
                     <div className="mt-3">
                       <KeyValueTable rows={derived?.summaryRows || []} />

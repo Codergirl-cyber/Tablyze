@@ -1,6 +1,8 @@
-- [ ] Inspect current statistic cards rendering in app/page.tsx
-- [ ] Derive duplicate-row count client-side from backend analysis JSON (without backend/API changes)
-- [x] Replace statistic card placeholders so they show: Total Rows, Total Columns, Missing Values, Duplicate Rows
-- [ ] Verify TypeScript build and run Next.js app to confirm UI output
+# TODO
 
+- [x] Inspect backend to confirm correlation_matrix availability.
+- [x] Inspect frontend to locate Correlation Heatmap placeholder.
+- [ ] Implement `app/components/CorrelationHeatmap.tsx` to render correlation matrix with responsive colored cells and numeric values.
+- [ ] Update `app/page.tsx` to replace only the Correlation Heatmap placeholder with the new component.
+- [ ] Run Next.js lint/build (if available) to ensure types compile.
 
