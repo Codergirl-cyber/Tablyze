@@ -5,6 +5,7 @@ import DashboardShell from "./components/DashboardShell";
 import KeyValueTable from "./components/KeyValueTable";
 import SectionCard from "./components/SectionCard";
 import StatCard from "./components/StatCard";
+import MissingValuesBarChart from "./components/MissingValuesBarChart";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -182,8 +183,12 @@ export default function Home() {
                   <div className="lg:col-span-2">
                     <SectionCard title="Missing Values" subtitle="Placeholder for missing values visualization">
                       <div className="text-sm text-gray-600">
-                        Chart placeholder (no charts implemented yet). You can use the provided
-                        <span className="font-mono text-gray-900 ml-1">missing_values</span> data.
+                        <span className="font-mono text-gray-900">missing_values</span> missing counts per column.
+                      </div>
+                      <div className="mt-3">
+                        <MissingValuesBarChart
+                          missingValues={(result?.missing_values as Record<string, number> | undefined) || {}}
+                        />
                       </div>
                       <div className="mt-3">
                         <KeyValueTable
