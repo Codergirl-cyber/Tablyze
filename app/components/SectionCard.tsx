@@ -10,19 +10,22 @@ export default function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white border border-gray-200 rounded-xl shadow-sm">
-      <div className="px-4 py-3 border-b border-gray-100">
+    <section className="bg-white border border-gray-200 rounded-2xl shadow-sm">
+      <div className="px-4 sm:px-5 py-3 border-b border-gray-100">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 leading-tight">
+              {title}
+            </h2>
             {subtitle ? (
-              <p className="mt-0.5 text-sm text-gray-600">{subtitle}</p>
+              <p className="mt-0.5 text-sm text-gray-600 leading-snug">{subtitle}</p>
             ) : null}
           </div>
         </div>
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-4 sm:p-5">{children}</div>
     </section>
   );
 }
+
 

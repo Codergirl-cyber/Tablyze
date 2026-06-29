@@ -19,7 +19,9 @@ export default function KeyValueTable({
 }) {
   if (!rows.length) {
     return (
-      <div className="text-sm text-gray-600">No data available.</div>
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+        No rows to display.
+      </div>
     );
   }
 
@@ -36,7 +38,10 @@ export default function KeyValueTable({
         <thead>
           <tr className="text-left text-gray-600">
             {headers.map((h) => (
-              <th key={h} className="px-2 py-2 font-medium border-b border-gray-100">
+              <th
+                key={h}
+                className="px-3 py-2 font-semibold border-b border-gray-100 bg-white sticky top-0"
+              >
                 {h}
               </th>
             ))}
@@ -44,9 +49,12 @@ export default function KeyValueTable({
         </thead>
         <tbody>
           {rows.map((r, idx) => (
-            <tr key={idx} className="border-b border-gray-50">
+            <tr
+              key={idx}
+              className={idx % 2 === 0 ? "border-b border-gray-50 bg-white" : "border-b border-gray-50 bg-gray-50"}
+            >
               {headers.map((h) => (
-                <td key={h} className="px-2 py-2 text-gray-900">
+                <td key={h} className="px-3 py-2 text-gray-900 whitespace-nowrap">
                   {toRenderable(r[h])}
                 </td>
               ))}
@@ -57,4 +65,5 @@ export default function KeyValueTable({
     </div>
   );
 }
+
 

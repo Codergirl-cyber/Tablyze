@@ -26,16 +26,31 @@ export default function MissingValuesBarChart({
       missing: Number(missing) || 0,
     }));
 
-    // Keep a stable order; backend typically returns dict order but ensure deterministic UI.
     entries.sort((a, b) => a.column.localeCompare(b.column));
     return entries;
   }, [missingValues]);
 
+  const hasAny = data.some((d) => d.missing > 0);
+
+  if (!data.length || !hasAny) {
+    return (
+      <div className="w-full h-[220px] sm:h-[320px] flex items-center justify-center rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm text-gray-600">
+        No missing values found.
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full h-[320px]">
+    <div className="w-full h-[220px] sm:h-[320px]">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 10, right: 16, left: 0, bottom: 40 }}>
-          <XAxis dataKey="column" interval={0} angle={-35} textAnchor="end" height={80} />
+          <XAxis
+            dataKey="column"
+            interval={0}
+            angle={-35}
+            textAnchor="end"
+            height={80}
+          />
           <YAxis allowDecimals={false} />
           <Tooltip
             formatter={(value: unknown) => [`${value}`, "Missing"]}
@@ -47,4 +62,6 @@ export default function MissingValuesBarChart({
     </div>
   );
 }
+
+
 

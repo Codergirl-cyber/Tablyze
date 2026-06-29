@@ -14,81 +14,76 @@ type DtypesPieChartProps = {
   dtypes: Record<string, string>;
 };
 
-type Bucket = {
-  key: string;
-  label: string;
-  match: (dtype: string) => boolean;
-};
+const COLORS = {
+  other: "#94a3b8", // slate-400
+  palette: [
+    "#111827", // gray-900
+    "#2563eb", // blue-600
+    "#16a34a", // green-600
+    "#f59e0b", // amber-500
+    "#7c3aed", // violet-600
+    "#0891b2", // cyan-600
+    "#dc2626", // red-600
+    "#4f46e5", // indigo-600
+    "#059669", // emerald-600
+    "#d97706", // amber-700
+  ],
+} as const;
 
-const BUCKETS: Bucket[] = [
-  {
-    key: "object",
-    label: "object",
-    match: (dtype) => /object/i.test(dtype),
-  },
-  {
-    key: "int64",
-    label: "int64",
-    match: (dtype) => /int/i.test(dtype) && !/float/i.test(dtype),
-  },
-  {
-    key: "float64",
-    label: "float64",
-    match: (dtype) => /float/i.test(dtype),
-  },
-  {
-    key: "bool",
-    label: "bool",
-    match: (dtype) => /bool/i.test(dtype),
-  },
-  {
-    key: "datetime64",
-    label: "datetime64",
-    match: (dtype) => /datetime/i.test(dtype),
-  },
-];
-
-function bucketForDtype(dtype: string): string {
-  const d = String(dtype ?? "");
-  for (const b of BUCKETS) {
-    if (b.match(d)) return b.key;
-  }
-  return "other";
+function colorForKey(key: string, index: number) {
+  if (key === "other") return COLORS.other;
+  return COLORS.palette[index % COLORS.palette.length];
 }
 
-const COLORS: Record<string, string> = {
-  object: "#111827", // gray-900
-  int64: "#2563eb", // blue-600
-  float64: "#16a34a", // green-600
-  bool: "#f59e0b", // amber-500
-  datetime64: "#7c3aed", // violet-600
-  other: "#94a3b8", // slate-400
-};
 
 export default function DataTypesPieChart({ dtypes }: DtypesPieChartProps) {
   const data = useMemo(() => {
     const counts = new Map<string, number>();
 
     for (const [, dtype] of Object.entries(dtypes || {})) {
-      const bucket = bucketForDtype(dtype);
-      counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
+      const normalized = String(dtype ?? "");
+      if (!normalized) continue;
+      counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
     }
 
-    const order = [...BUCKETS.map((b) => b.key), "other"];
-    return order
-      .map((key) => {
-        const label = BUCKETS.find((b) => b.key === key)?.label ?? "other";
-        return {
-          name: label,
-          key,
-          value: counts.get(key) ?? 0,
-        };
-      })
+    const all = Array.from(counts.entries())
+      .map(([key, value]) => ({ name: key, key, value }))
       .filter((d) => d.value > 0);
+
+    const distinctTypes = all.length;
+
+    const sorted = [...all].sort((a, b) => {
+      if (b.value !== a.value) return b.value - a.value;
+      return a.key.localeCompare(b.key);
+    });
+
+    if (distinctTypes <= 6) {
+      return sorted;
+    }
+
+    const top = sorted.slice(0, 6);
+    const rest = sorted.slice(6);
+    const otherValue = rest.reduce((acc, d) => acc + d.value, 0);
+
+    const result = top;
+    if (otherValue > 0) {
+      result.push({ name: "other", key: "other", value: otherValue });
+    }
+    return result;
   }, [dtypes]);
 
+  const hasAny = data.reduce((acc, d) => acc + d.value, 0) > 0;
+
+  if (!data.length || !hasAny) {
+    return (
+      <div className="h-[220px] sm:h-[320px] flex items-center justify-center rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm text-gray-600">
+        No data types available.
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full h-[320px]">
+    <div className="w-full h-[220px] sm:h-[320px]">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Tooltip
@@ -112,11 +107,8 @@ export default function DataTypesPieChart({ dtypes }: DtypesPieChartProps) {
               return `${entry.name}: ${v}`;
             }}
           >
-            {data.map((entry) => (
-              <Cell
-                key={entry.key}
-                fill={COLORS[entry.key] ?? COLORS.other}
-              />
+            {data.map((entry, idx) => (
+              <Cell key={entry.key} fill={colorForKey(entry.key, idx)} />
             ))}
           </Pie>
         </PieChart>
@@ -124,4 +116,5 @@ export default function DataTypesPieChart({ dtypes }: DtypesPieChartProps) {
     </div>
   );
 }
+
 

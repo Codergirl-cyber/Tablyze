@@ -9,21 +9,22 @@ import MissingValuesBarChart from "./components/MissingValuesBarChart";
 import DataTypesPieChart from "./components/DataTypesPieChart";
 import CorrelationHeatmap from "./components/CorrelationHeatmap";
 
-
-
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const uploadFile = async () => {
     console.log("uploadFile called");
     console.log("Current file:", file);
-    try {
-      if (!file) {
-        console.log("No file selected");
-        return;
-      }
 
+    if (!file) {
+      console.log("No file selected");
+      return;
+    }
+
+    try {
+      setIsUploading(true);
       console.log("Uploading file...");
 
       const formData = new FormData();
@@ -42,6 +43,8 @@ export default function Home() {
       setResult(data);
     } catch (err) {
       console.error("Upload failed:", err);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -89,36 +92,56 @@ export default function Home() {
       ? result.column_names
       : [];
 
-    const dtypes: Record<string, string> = (result.dtypes as Record<string, string> | undefined) || {};
+    const dtypes: Record<string, string> =
+      (result.dtypes as Record<string, string> | undefined) || {};
     const numericColumns = columnNames.filter(
-      (c) => String(dtypes[c] ?? "").toLowerCase().includes("int") || String(dtypes[c] ?? "").toLowerCase().includes("float") || String(dtypes[c] ?? "").toLowerCase().includes("number")
+      (c) =>
+        String(dtypes[c] ?? "")
+          .toLowerCase()
+          .includes("int") ||
+        String(dtypes[c] ?? "")
+          .toLowerCase()
+          .includes("float") ||
+        String(dtypes[c] ?? "")
+          .toLowerCase()
+          .includes("number")
     ).length;
 
-    const missingValues: Record<string, number> = (result.missing_values as Record<string, number> | undefined) || {};
-    const missingTotal = Object.values(missingValues).reduce((acc, v) => acc + (Number(v) || 0), 0);
+    const missingValues: Record<string, number> =
+      (result.missing_values as Record<string, number> | undefined) || {};
+    const missingTotal = Object.values(missingValues).reduce(
+      (acc, v) => acc + (Number(v) || 0),
+      0
+    );
 
     const numericSummary = result.numeric_summary || {};
 
-    const summaryRows: Array<Record<string, unknown>> = Object.entries(numericSummary).map(([col, stats]) => {
-      const s = stats as Record<string, unknown>;
-      return {
-        Column: col,
-        Count: s?.count ?? null,
-        Mean: s?.mean ?? null,
-        Std: s?.std ?? null,
-        Min: s?.min ?? null,
-        "25%": s?.["25%"] ?? null,
-        "50%": s?.["50%"] ?? null,
-        "75%": s?.["75%"] ?? null,
-        Max: s?.max ?? null,
-      };
-    });
+    const summaryRows: Array<Record<string, unknown>> = Object.entries(numericSummary).map(
+      ([col, stats]) => {
+        const s = stats as Record<string, unknown>;
+        return {
+          Column: col,
+          Count: s?.count ?? null,
+          Mean: s?.mean ?? null,
+          Std: s?.std ?? null,
+          Min: s?.min ?? null,
+          "25%": s?.["25%"] ?? null,
+          "50%": s?.["50%"] ?? null,
+          "75%": s?.["75%"] ?? null,
+          Max: s?.max ?? null,
+        };
+      }
+    );
 
-    // Placeholders (no chart implementation yet)
-    const missingValuesEntries = Object.entries(missingValues).map(([k, v]) => ({ column: k, missing: v }));
-    const dataTypesEntries = Object.entries(dtypes).map(([k, v]) => ({ column: k, dtype: v }));
+    const missingValuesEntries = Object.entries(missingValues).map(([k, v]) => ({
+      column: k,
+      missing: v,
+    }));
+    const dataTypesEntries = Object.entries(dtypes).map(([k, v]) => ({
+      column: k,
+      dtype: v,
+    }));
 
-    // KeyValueTable expects ReactNode values; cast derived rows for UI rendering.
     const summaryRowsForTable = summaryRows as Array<Record<string, React.ReactNode>>;
 
     return {
@@ -135,33 +158,41 @@ export default function Home() {
     };
   }, [result]);
 
+  const hasAnalysis = Boolean(result) && !derived?.error;
+
   return (
     <main className="min-h-screen bg-gray-50 text-black p-4 sm:p-6">
       <div className="w-full max-w-6xl mx-auto">
         <div className="bg-white shadow-sm border border-gray-200 rounded-2xl p-4 sm:p-6">
-          <DashboardShell title="Tablyze" subtitle="Upload a CSV and explore dataset profiling results." >
+          <DashboardShell
+            title="Tablyze"
+            subtitle="Upload a CSV and explore dataset profiling results."
+          >
             <div className="flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <input
                   type="file"
                   accept=".csv"
+                  disabled={isUploading}
                   onChange={(e) => {
                     const selectedFile = e.target.files?.[0] || null;
                     console.log("Selected file:", selectedFile);
                     setFile(selectedFile);
+                    // Reset previous result when a new file is chosen.
+                    setResult(null);
                   }}
-                  className="block w-full sm:w-auto text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:border-0 file:rounded-lg file:bg-gray-100 file:text-gray-900 hover:file:bg-gray-200"
+                  className="block w-full sm:w-auto text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:border-0 file:rounded-lg file:bg-gray-100 file:text-gray-900 hover:file:bg-gray-200 disabled:opacity-60"
                 />
 
                 <button
-                  className="px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-gray-800 active:bg-gray-900 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-gray-800 active:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => {
                     console.log("BUTTON CLICKED");
                     uploadFile();
                   }}
-                  disabled={!file}
+                  disabled={!file || isUploading}
                 >
-                  Upload
+                  {isUploading ? "Analyzing…" : "Upload"}
                 </button>
               </div>
 
@@ -172,26 +203,97 @@ export default function Home() {
               ) : null}
             </div>
 
-            {result && !derived?.error ? (
+            {!hasAnalysis && !isUploading && !file ? (
+              <div className="mt-8">
+                <div className="rounded-2xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white p-5 sm:p-7">
+                  <div className="text-sm font-medium text-gray-700">Get started</div>
+                  <h3 className="mt-1 text-lg sm:text-xl font-semibold text-gray-900">
+                    Upload a CSV to unlock insights
+                  </h3>
+                  <p className="mt-2 text-sm sm:text-base text-gray-600 max-w-2xl">
+                    You’ll see missing values, data types, correlation heatmaps, and summary
+                    statistics.
+                  </p>
+                  <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+                    <div className="inline-flex items-center rounded-lg bg-white border border-gray-200 px-3 py-2 text-sm text-gray-700">
+                      Tip: Try <span className="font-mono">sample.csv</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {isUploading ? (
               <div className="mt-6">
-                {/* Overview */}
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1 h-2.5 w-2.5 rounded-full bg-gray-900 animate-pulse" />
+                    <div>
+                      <div className="text-base font-semibold text-gray-900">
+                        Analyzing your dataset…
+                      </div>
+                      <div className="mt-1 text-sm text-gray-600">
+                        Computing summaries, distributions, and correlations.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {Array.from({ length: 4 }).map((_, idx) => (
+                      <div
+                        key={idx}
+                        className="rounded-xl border border-gray-200 bg-gray-50 p-4 animate-pulse"
+                      >
+                        <div className="h-3 w-1/2 rounded bg-gray-200" />
+                        <div className="mt-3 h-6 w-2/3 rounded bg-gray-200" />
+                        <div className="mt-2 h-3 w-1/3 rounded bg-gray-200" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {hasAnalysis ? (
+              <div className="mt-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label="Total Rows" value={derived?.rows ?? "—"} hint="Total records" />
-                  <StatCard label="Total Columns" value={derived?.columns ?? "—"} hint="Total features" />
-                  <StatCard label="Missing Values" value={derived?.missingTotal ?? "—"} hint="Total null/NaN count" />
-                  <StatCard label="Duplicate Rows" value={derived?.duplicateRows ?? "—"} hint="Rows duplicated across all columns" />
+                  <StatCard
+                    label="Total Rows"
+                    value={derived?.rows ?? "—"}
+                    hint="Total records"
+                  />
+                  <StatCard
+                    label="Total Columns"
+                    value={derived?.columns ?? "—"}
+                    hint="Total features"
+                  />
+                  <StatCard
+                    label="Missing Values"
+                    value={derived?.missingTotal ?? "—"}
+                    hint="Total null/NaN count"
+                  />
+                  <StatCard
+                    label="Duplicate Rows"
+                    value={derived?.duplicateRows ?? "—"}
+                    hint="Rows duplicated across all columns"
+                  />
                 </div>
 
-                {/* Charts placeholders + table */}
                 <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <div className="lg:col-span-2">
-                    <SectionCard title="Missing Values" subtitle="Placeholder for missing values visualization">
+                    <SectionCard
+                      title="Missing Values"
+                      subtitle="Missing counts per column"
+                    >
                       <div className="text-sm text-gray-600">
-                        <span className="font-mono text-gray-900">missing_values</span> missing counts per column.
+                        <span className="font-mono text-gray-900">missing_values</span> missing
+                        counts per column.
                       </div>
                       <div className="mt-3">
                         <MissingValuesBarChart
-                          missingValues={(result?.missing_values as Record<string, number> | undefined) || {}}
+                          missingValues={
+                            (result?.missing_values as Record<string, number> | undefined) || {}
+                          }
                         />
                       </div>
                       <div className="mt-3">
@@ -205,8 +307,11 @@ export default function Home() {
                   </div>
 
                   <div>
-                    <SectionCard title="Data Types" subtitle="Data type distribution (grouped by dtype) ">
-                      <div className="mt-2 text-sm text-gray-600">
+                    <SectionCard
+                      title="Data Types"
+                      subtitle="Data type distribution (grouped by dtype)"
+                    >
+                      <div className="mt-1 text-sm text-gray-600">
                         Distribution of column counts grouped by data type.
                       </div>
                       <div className="mt-3">
@@ -223,12 +328,21 @@ export default function Home() {
                     title="Correlation Heatmap"
                     subtitle="Correlation matrix for numeric columns"
                   >
-                    <CorrelationHeatmap correlationMatrix={derived?.correlationMatrix as any} />
+                    <CorrelationHeatmap
+                      correlationMatrix={
+                        (derived?.correlationMatrix as Record<string, Record<string, number>>)
+                      }
+                    />
                   </SectionCard>
 
-                  <SectionCard title="Summary Statistics" subtitle="Numeric columns summary">
 
-                    <div className="text-sm text-gray-600">Table derived from <span className="font-mono text-gray-900">numeric_summary</span>.</div>
+                  <SectionCard
+                    title="Summary Statistics"
+                    subtitle="Numeric columns summary"
+                  >
+                    <div className="text-sm text-gray-600">
+                      Table derived from <span className="font-mono text-gray-900">numeric_summary</span>.
+                    </div>
                     <div className="mt-3">
                       <KeyValueTable rows={derived?.summaryRows || []} />
                     </div>
@@ -242,4 +356,5 @@ export default function Home() {
     </main>
   );
 }
+
 

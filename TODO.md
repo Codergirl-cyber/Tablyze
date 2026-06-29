@@ -1,8 +1,13 @@
 # TODO
 
-- [x] Inspect backend to confirm correlation_matrix availability.
-- [x] Inspect frontend to locate Correlation Heatmap placeholder.
-- [ ] Implement `app/components/CorrelationHeatmap.tsx` to render correlation matrix with responsive colored cells and numeric values.
-- [ ] Update `app/page.tsx` to replace only the Correlation Heatmap placeholder with the new component.
-- [ ] Run Next.js lint/build (if available) to ensure types compile.
+- [x] Create responsive + polished empty states (before CSV upload) in app/page.tsx
+- [x] Add loading state while analysis/upload is in progress in app/page.tsx
+- [x] Improve spacing/alignment/visual hierarchy across DashboardShell, SectionCard, StatCard
+- [ ] Make chart/table card layouts more responsive for mobile/tablet in app/page.tsx and SectionCard
+- [x] Add friendly “insufficient data” empty messaging inside each chart component
+- [x] Improve KeyValueTable spacing/typography and horizontal scrolling on small screens
+- [x] Ensure all charts are wrapped in ResponsiveContainer with responsive heights
+- [ ] Run lint/build to verify no TS/JSX or recharts issues
+
+
 

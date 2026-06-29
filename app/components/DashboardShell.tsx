@@ -10,15 +10,22 @@ export default function DashboardShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="w-full max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{title}</h1>
+    <div className="w-full">
+      <div className="mb-6 sm:mb-8">
+        <div className="flex items-baseline justify-between gap-4">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+            {title}
+          </h1>
+        </div>
         {subtitle ? (
-          <p className="mt-1 text-sm sm:text-base text-gray-600">{subtitle}</p>
+          <p className="mt-1 text-sm sm:text-base text-gray-600 leading-snug">
+            {subtitle}
+          </p>
         ) : null}
       </div>
       {children}
     </div>
   );
 }
+
 
