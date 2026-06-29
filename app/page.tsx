@@ -6,6 +6,8 @@ import KeyValueTable from "./components/KeyValueTable";
 import SectionCard from "./components/SectionCard";
 import StatCard from "./components/StatCard";
 import MissingValuesBarChart from "./components/MissingValuesBarChart";
+import DataTypesPieChart from "./components/DataTypesPieChart";
+
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -201,16 +203,13 @@ export default function Home() {
                   </div>
 
                   <div>
-                    <SectionCard title="Data Types" subtitle="Placeholder for dtypes visualization">
-                      <div className="text-sm text-gray-600">
-                        Chart placeholder (no charts implemented yet). You can use the provided
-                        <span className="font-mono text-gray-900 ml-1">dtypes</span> data.
+                    <SectionCard title="Data Types" subtitle="Data type distribution (grouped by dtype) ">
+                      <div className="mt-2 text-sm text-gray-600">
+                        Distribution of column counts grouped by data type.
                       </div>
                       <div className="mt-3">
-                        <KeyValueTable
-                          rows={(derived?.dataTypesEntries || [])
-                            .slice(0, 10)
-                            .map((r) => ({ Column: r.column, Dtype: r.dtype }))}
+                        <DataTypesPieChart
+                          dtypes={(result?.dtypes as Record<string, string> | undefined) || {}}
                         />
                       </div>
                     </SectionCard>
