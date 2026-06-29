@@ -19,6 +19,17 @@ def home():
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
+    def to_jsonable(val):
+        # Minimal helper to keep JSON-serializable output for pandas/numpy scalars
+        if pd.isna(val):
+            return None
+        if hasattr(val, "item"):
+            try:
+                return val.item()
+            except Exception:
+                pass
+        return val
+
     try:
         df = pd.read_csv(file.file)
 
@@ -28,13 +39,8 @@ async def upload(file: UploadFile = File(...)):
         missing_values = {}
         for col in df.columns:
             missing_count = int(missing_series[col])
-            missing_percent = (missing_count / total_rows * 100) if total_rows > 0 else 0.0
-            missing_values[str(col)] = {
-                "missing_count": missing_count,
-                "missing_percent": missing_percent,
-            }
+            missing_values[str(col)] = missing_count
 
-        # Summary statistics + correlation for all numeric columns
         numeric_df = df.select_dtypes(include=["number"])
 
         # Correlation matrix (numeric columns only). If <2 numeric columns, return empty.
@@ -47,16 +53,7 @@ async def upload(file: UploadFile = File(...)):
             }
 
 
-        def to_jsonable(x):
-            # Convert pandas/numpy scalars to native Python types for JSON.
-            if pd.isna(x):
-                return None
-            if isinstance(x, (pd.Timestamp,)):
-                return str(x)
-            try:
-                return x.item()  # numpy scalar -> python scalar
-            except Exception:
-                return x
+        
 
         numeric_summary = {}
         iqr_outliers = {}

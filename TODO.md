@@ -1,11 +1,10 @@
-- [x] Update FastAPI /upload endpoint to add IQR-based outlier detection for every numeric column
-  - [x] Compute Q1, Q3, IQR per numeric column
-  - [x] Compute lower/upper bounds using 1.5*IQR
-  - [x] Count outliers below/above bounds (excluding NaNs)
-  - [x] Add non-breaking response field `iqr_outliers` to JSON
-- [x] Verify JSON-serializability
+# TODO
 
-- [x] (Optional) Run backend and manually upload sample.csv to confirm output includes `iqr_outliers`
-
-
+- [x] Inspect current Next.js frontend and backend response shape.
+- [x] Replace JSON `<pre>` output with a Tailwind responsive dashboard layout.
+- [x] Add reusable UI components (DashboardShell, StatCard, SectionCard, KeyValueTable).
+- [x] Add 4 overview stat cards.
+- [x] Create placeholders for: Missing Values chart, Data Types chart, Correlation Heatmap.
+- [x] Create Summary Statistics table using existing `numeric_summary` data.
+- [ ] Verify build/dev compiles and upload workflow remains functional.
 
