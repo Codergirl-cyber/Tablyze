@@ -8,11 +8,14 @@ import StatCard from "./components/StatCard";
 import MissingValuesBarChart from "./components/MissingValuesBarChart";
 import DataTypesPieChart from "./components/DataTypesPieChart";
 import CorrelationHeatmap from "./components/CorrelationHeatmap";
+import AiSummaryCard from "./components/AiSummaryCard";
+import Spinner from "./components/Spinner";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const uploadFile = async () => {
     console.log("uploadFile called");
@@ -23,28 +26,42 @@ export default function Home() {
       return;
     }
 
+    setUploadError(null);
     try {
-  setIsUploading(true);
-  console.log("Uploading file...");
+      setIsUploading(true);
+      console.log("Uploading file...");
 
-  const formData = new FormData();
-  formData.append("file", file);
+      const formData = new FormData();
+      formData.append("file", file);
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  const res = await fetch(`${API_URL}/upload`, {
-    method: "POST",
-    body: formData,
-  });
+      const API_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-  console.log("Response status:", res.status);
+      const res = await fetch(`${API_URL}/upload`, {
+        method: "POST",
+        body: formData,
+      });
 
+      console.log("Response status:", res.status);
       const data = await res.json();
       console.log("Response data:", data);
 
-      setResult(data);
+      if (!res.ok) {
+        const message =
+          typeof data?.error === "string"
+            ? data.error
+            : "Unable to upload the file at this time. Please try again.";
+        setUploadError(message);
+        setResult(null);
+      } else {
+        setResult(data);
+      }
     } catch (err) {
       console.error("Upload failed:", err);
+      setUploadError(
+        "Unable to upload the file right now. Please check your network and try again."
+      );
+      setResult(null);
     } finally {
       setIsUploading(false);
     }
@@ -144,6 +161,9 @@ const API_URL =
       dtype: v,
     }));
 
+    const aiSummary =
+      typeof result.ai_summary === "string" ? result.ai_summary : undefined;
+
     const summaryRowsForTable = summaryRows as Array<Record<string, React.ReactNode>>;
 
     return {
@@ -157,10 +177,16 @@ const API_URL =
       dataTypesEntries,
       correlationMatrix: result.correlation_matrix || {},
       categoricalTopFrequencies: result.categorical_top_frequencies || {},
+      aiSummary,
     };
   }, [result]);
 
   const hasAnalysis = Boolean(result) && !derived?.error;
+  const aiSummary = derived?.aiSummary;
+  const errorMessage = uploadError ||
+    (derived?.error
+      ? `Something went wrong while analyzing your dataset: ${derived.error}`
+      : null);
 
   return (
     <main className="min-h-screen bg-gray-50 text-black p-4 sm:p-6">
@@ -198,9 +224,16 @@ const API_URL =
                 </button>
               </div>
 
-              {derived?.error ? (
+              {isUploading ? (
+                <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
+                  <Spinner className="h-4 w-4 text-gray-600" />
+                  Generating AI summary...
+                </div>
+              ) : null}
+
+              {errorMessage ? (
                 <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                  {derived.error}
+                  {errorMessage}
                 </div>
               ) : null}
             </div>
@@ -349,6 +382,10 @@ const API_URL =
                       <KeyValueTable rows={derived?.summaryRows || []} />
                     </div>
                   </SectionCard>
+                </div>
+
+                <div className="mt-4">
+                  <AiSummaryCard summary={aiSummary ?? undefined} error={uploadError} />
                 </div>
               </div>
             ) : null}
