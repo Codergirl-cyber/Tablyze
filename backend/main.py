@@ -1,6 +1,15 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
+from dotenv import load_dotenv
+import os
+from groq import Groq
+
+# Load environment variables from .env
+load_dotenv()
+
+# Initialize Groq client
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 app = FastAPI()
 
@@ -12,6 +21,119 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def generate_summary(stats: dict) -> str:
+    """
+    Generate a professional data summary using the Groq Chat Completions API.
+    
+    Args:
+        stats: Dictionary containing dataset statistics (rows, columns, missing_values, 
+               numeric_summary, correlation_matrix, etc.)
+    
+    Returns:
+        A string containing the generated summary or a friendly error message.
+    """
+    try:
+        # Format statistics for the LLM
+        summary_text = f"""
+Dataset Overview:
+- Total Rows: {stats.get('rows', 'N/A')}
+- Total Columns: {stats.get('columns', 'N/A')}
+- Column Names: {', '.join(stats.get('column_names', []))}
+
+Missing Values:
+{format_missing_values(stats.get('missing_values', {}))}
+
+Numeric Summary:
+{format_numeric_summary(stats.get('numeric_summary', {}))}
+
+Correlation Matrix (strong correlations only):
+{format_correlations(stats.get('correlation_matrix', {}))}
+
+Data Types:
+{', '.join([f'{col}: {dtype}' for col, dtype in stats.get('dtypes', {}).items()])}
+"""
+        
+        prompt = f"""You are a professional data analyst.
+
+Analyze these dataset statistics:
+
+{summary_text}
+
+Your summary should:
+- Mention dataset size.
+- Highlight missing values.
+- Mention strong correlations if present.
+- Suggest possible preprocessing steps.
+- Avoid speculation or unsupported conclusions.
+- Keep the response concise (5–8 bullet points).
+
+Provide your analysis as a bulleted list."""
+        
+        # Call Groq API with low temperature for consistency
+        message = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        )
+        
+        # Extract and return the summary text
+        return message.choices[0].message.content
+        
+    except Exception as e:
+        return f"Unable to generate summary at this moment. Error: {str(e)}"
+
+
+def format_missing_values(missing_values: dict) -> str:
+    """Format missing values data for the summary."""
+    if not missing_values:
+        return "- No missing values detected."
+    
+    items = [f"  - {col}: {count} missing" for col, count in missing_values.items() if count > 0]
+    if not items:
+        return "- No missing values detected."
+    return "\n".join(items)
+
+
+def format_numeric_summary(numeric_summary: dict) -> str:
+    """Format numeric summary statistics for the summary."""
+    if not numeric_summary:
+        return "- No numeric columns found."
+    
+    lines = []
+    for col, stats in numeric_summary.items():
+        lines.append(f"  - {col}: mean={stats.get('mean', 'N/A')}, std={stats.get('std', 'N/A')}, "
+                     f"min={stats.get('min', 'N/A')}, max={stats.get('max', 'N/A')}")
+    return "\n".join(lines) if lines else "- No numeric columns found."
+
+
+def format_correlations(correlation_matrix: dict) -> str:
+    """Format strong correlations (>0.7 or <-0.7) for the summary."""
+    if not correlation_matrix:
+        return "- No correlations calculated."
+    
+    strong_correlations = []
+    seen_pairs = set()
+    
+    for col1, correlations in correlation_matrix.items():
+        for col2, corr_value in correlations.items():
+            if corr_value is None or col1 == col2:
+                continue
+            
+            # Avoid duplicate pairs
+            pair = tuple(sorted([col1, col2]))
+            if pair in seen_pairs:
+                continue
+            
+            # Only show strong correlations
+            if abs(corr_value) > 0.7:
+                strong_correlations.append(f"  - {col1} ↔ {col2}: {corr_value:.2f}")
+                seen_pairs.add(pair)
+    
+    if not strong_correlations:
+        return "- No strong correlations detected."
+    return "\n".join(strong_correlations)
+
 
 @app.get("/")
 def home():
@@ -127,6 +249,23 @@ async def upload(file: UploadFile = File(...)):
                 for idx, cnt in vc.items()
             ]
 
+        # Create stats dictionary for AI summary generation
+        stats = {
+            "rows": df.shape[0],
+            "columns": df.shape[1],
+            "column_names": list(df.columns),
+            "dtypes": df.dtypes.astype(str).to_dict(),
+            "missing_values": missing_values,
+            "numeric_summary": numeric_summary,
+            "correlation_matrix": correlation_matrix,
+        }
+
+        # Generate AI summary
+        try:
+            ai_summary = generate_summary(stats)
+        except Exception:
+            ai_summary = "AI summary unavailable."
+
         return {
             "rows": df.shape[0],
             "columns": df.shape[1],
@@ -137,6 +276,7 @@ async def upload(file: UploadFile = File(...)):
             "iqr_outliers": iqr_outliers,
             "correlation_matrix": correlation_matrix,
             "categorical_top_frequencies": categorical_top_frequencies,
+            "ai_summary": ai_summary,
         }
 
 
