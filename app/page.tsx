@@ -30,7 +30,11 @@ export default function Home() {
       const formData = new FormData();
       formData.append("file", file);
 
+<<<<<<< HEAD
      const API_URL =
+=======
+      const API_URL =
+>>>>>>> 6df38932d8dbb4e4bb58f8d80453785338514708
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const res = await fetch(`${API_URL}/upload`, {
