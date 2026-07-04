@@ -34,10 +34,7 @@ export default function Home() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const API_URL =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-      const res = await fetch(`${API_URL}/upload`, {
+      const res = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
@@ -162,7 +159,11 @@ export default function Home() {
     }));
 
     const aiSummary =
-      typeof result.ai_summary === "string" ? result.ai_summary : undefined;
+      typeof result.ai_summary === "string" && result.ai_summary.trim()
+        ? result.ai_summary
+        : typeof result.summary === "string" && result.summary.trim()
+          ? result.summary
+          : undefined;
 
     const summaryRowsForTable = summaryRows as Array<Record<string, React.ReactNode>>;
 
