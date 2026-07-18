@@ -7,12 +7,15 @@ from dotenv import load_dotenv, find_dotenv
 import os
 from groq import Groq
 
-# Load environment variables from .env
-dotenv_path = find_dotenv(usecwd=True)
-if dotenv_path:
-    load_dotenv(dotenv_path)
+# Load environment variables from .env, .env.local, or backend/.env
+for env_file in [".env", ".env.local", "backend/.env"]:
+    dotenv_path = find_dotenv(env_file, usecwd=True)
+    if dotenv_path:
+        load_dotenv(dotenv_path)
+        print(f"Loaded environment variables from {dotenv_path}")
+        break
 else:
-    print("Warning: .env file not found. GROQ_API_KEY may be missing.")
+    print("Warning: .env, .env.local, or backend/.env file not found. GROQ_API_KEY may be missing.")
 
 # Initialize Groq client
 groq_client = None
