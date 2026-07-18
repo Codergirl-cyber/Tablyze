@@ -3,12 +3,16 @@ from fastapi.responses import JSONResponse
 import traceback
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 import os
 from groq import Groq
 
 # Load environment variables from .env
-load_dotenv()
+dotenv_path = find_dotenv(usecwd=True)
+if dotenv_path:
+    load_dotenv(dotenv_path)
+else:
+    print("Warning: .env file not found. GROQ_API_KEY may be missing.")
 
 # Initialize Groq client
 groq_client = None
