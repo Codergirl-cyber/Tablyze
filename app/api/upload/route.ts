@@ -30,13 +30,12 @@ export async function POST(request: NextRequest) {
     try {
       const data = JSON.parse(responseText);
       return NextResponse.json(data, { status: upstreamResponse.status });
-    } catch {
-      return new NextResponse(responseText, {
-        status: upstreamResponse.status,
-        headers: {
-          "content-type": "application/json",
-        },
-      });
+    } catch (parseErr) {
+      console.error("Upstream response is not valid JSON:", responseText);
+      return NextResponse.json(
+        { error: typeof responseText === "string" ? responseText : String(responseText) },
+        { status: upstreamResponse.status }
+      );
     }
   } catch (error) {
     console.error("Upload proxy error:", error);
