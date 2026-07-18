@@ -1,4 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import JSONResponse
+import traceback
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from dotenv import load_dotenv
@@ -9,7 +11,13 @@ from groq import Groq
 load_dotenv()
 
 # Initialize Groq client
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+groq_client = None
+try:
+    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+except Exception as e:
+    # Delay failure: log the error and allow the app to run without Groq.
+    # generate_summary will handle a missing client gracefully.
+    print("Warning: Groq client initialization failed:", str(e))
 
 app = FastAPI()
 
@@ -283,6 +291,6 @@ async def upload(file: UploadFile = File(...)):
 
 
     except Exception as e:
-        return {
-            "error": str(e)
-        }
+            # Log full traceback for easier debugging in server logs
+            traceback.print_exc()
+            return JSONResponse(content={"error": str(e)}, status_code=500)
