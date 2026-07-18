@@ -187,7 +187,7 @@ export default function Home() {
       dataTypesEntries,
       correlationMatrix: result.correlation_matrix || {},
       categoricalTopFrequencies: result.categorical_top_frequencies || {},
-      aiSummary,
+      aiSummary: derivedAiSummary,
     };
   }, [result]);
 
