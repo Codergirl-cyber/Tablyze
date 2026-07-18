@@ -41,6 +41,10 @@ def generate_summary(stats: dict) -> str:
     Returns:
         A string containing the generated summary or a friendly error message.
     """
+    # If Groq client failed to initialize, avoid calling it and return a clear message.
+    if groq_client is None:
+        return "Unable to generate summary at this moment. Error: Groq client not configured."
+
     try:
         # Format statistics for the LLM
         summary_text = f"""
