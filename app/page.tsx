@@ -51,6 +51,7 @@ export default function Home() {
         setUploadError(message);
         setResult(null);
       } else {
+        console.log("AI summary from response:", data?.ai_summary, data?.summary);
         setResult(data);
       }
     } catch (err) {
@@ -181,10 +182,12 @@ export default function Home() {
       : null);
   const hasUploadResult = Boolean(result) && !uploadError;
   const summaryToShow =
-    typeof result?.ai_summary === "string" && result.ai_summary.trim()
-      ? result.ai_summary
-      : typeof result?.summary === "string" && result.summary.trim()
-        ? result.summary
+    (result && typeof (result as Record<string, unknown>).ai_summary === "string" &&
+      ((result as Record<string, unknown>).ai_summary as string).trim())
+      ? ((result as Record<string, unknown>).ai_summary as string)
+      : (result && typeof (result as Record<string, unknown>).summary === "string" &&
+        ((result as Record<string, unknown>).summary as string).trim())
+        ? ((result as Record<string, unknown>).summary as string)
         : undefined;
 
   return (
