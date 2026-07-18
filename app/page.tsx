@@ -14,7 +14,6 @@ import Spinner from "./components/Spinner";
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
-  const [aiSummary, setAiSummary] = useState<string | undefined>(undefined);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -51,16 +50,8 @@ export default function Home() {
             : "Unable to upload the file at this time. Please try again.";
         setUploadError(message);
         setResult(null);
-        setAiSummary(undefined);
       } else {
         setResult(data);
-        const summaryFromResponse =
-          typeof data?.ai_summary === "string" && data.ai_summary.trim()
-            ? data.ai_summary
-            : typeof data?.summary === "string" && data.summary.trim()
-            ? data.summary
-            : undefined;
-        setAiSummary(summaryFromResponse);
       }
     } catch (err) {
       console.error("Upload failed:", err);
@@ -167,13 +158,6 @@ export default function Home() {
       dtype: v,
     }));
 
-    const derivedAiSummary =
-      typeof result.ai_summary === "string" && result.ai_summary.trim()
-        ? result.ai_summary
-        : typeof result.summary === "string" && result.summary.trim()
-          ? result.summary
-          : undefined;
-
     const summaryRowsForTable = summaryRows as Array<Record<string, React.ReactNode>>;
 
     return {
@@ -187,7 +171,6 @@ export default function Home() {
       dataTypesEntries,
       correlationMatrix: result.correlation_matrix || {},
       categoricalTopFrequencies: result.categorical_top_frequencies || {},
-      aiSummary: derivedAiSummary,
     };
   }, [result]);
 
@@ -197,7 +180,12 @@ export default function Home() {
       ? `Something went wrong while analyzing your dataset: ${derived.error}`
       : null);
   const hasUploadResult = Boolean(result) && !uploadError;
-  const summaryToShow = aiSummary ?? derived?.aiSummary;
+  const summaryToShow =
+    typeof result?.ai_summary === "string" && result.ai_summary.trim()
+      ? result.ai_summary
+      : typeof result?.summary === "string" && result.summary.trim()
+        ? result.summary
+        : undefined;
 
   return (
     <main className="min-h-screen bg-gray-50 text-black p-4 sm:p-6">
@@ -219,7 +207,6 @@ export default function Home() {
                     setFile(selectedFile);
                     // Reset previous result when a new file is chosen.
                     setResult(null);
-                    setAiSummary(undefined);
                     setUploadError(null);
                   }}
                   className="block w-full sm:w-auto text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:border-0 file:rounded-lg file:bg-gray-100 file:text-gray-900 hover:file:bg-gray-200 disabled:opacity-60"
