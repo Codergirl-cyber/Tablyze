@@ -12,12 +12,16 @@ load_dotenv()
 
 # Initialize Groq client
 groq_client = None
-try:
-    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-except Exception as e:
-    # Delay failure: log the error and allow the app to run without Groq.
-    # generate_summary will handle a missing client gracefully.
-    print("Warning: Groq client initialization failed:", str(e))
+groq_api_key = os.getenv("GROQ_API_KEY")
+if not groq_api_key:
+    print("Warning: GROQ_API_KEY is missing. Groq client not configured.")
+else:
+    try:
+        groq_client = Groq(api_key=groq_api_key)
+    except Exception as e:
+        # Delay failure: log the error and allow the app to run without Groq.
+        # generate_summary will handle a missing client gracefully.
+        print("Warning: Groq client initialization failed:", str(e))
 
 app = FastAPI()
 
