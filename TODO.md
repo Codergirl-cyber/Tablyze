@@ -1,25 +1,26 @@
-# Implementation Steps - Upload Progress Enhancement
+# Skeleton Loading Placeholders — Progress Tracker
 
-## Step 1: Create `app/components/UploadProgress.tsx`
-- [x] Create step-based progress component with stages:
-  - Uploading CSV...
-  - Parsing dataset...
-  - Computing statistics...
-  - Generating AI summary...
-  - Finalizing dashboard...
-- [x] Show only one active stage at a time with animated loading indicator
-- [x] Show checkmark for completed stages
-- [x] Show error state with X icon when upload fails
-- [x] Accept `currentStage` prop and `error` prop
+## Steps
 
-## Step 2: Update `app/page.tsx`
-- [x] Import and use `UploadProgress` component
-- [x] Add stage state machine (`useRef` for elapsed time tracking + `useState` for current stage)
-- [x] Replace existing `isUploading` Spinner + skeleton loader with `UploadProgress`
-- [x] Prevent duplicate uploads using `processingRef`
-- [x] Handle errors gracefully — map to the failed stage
+- [x] Step 1: Create `app/components/Skeleton.tsx` — Reusable skeleton primitives
+- [x] Step 2: Create `app/components/StatCardSkeleton.tsx` — Skeleton matching StatCard
+- [x] Step 3: Create `app/components/ChartSkeleton.tsx` — Skeleton for chart areas
+- [x] Step 4: Create `app/components/TableSkeleton.tsx` — Skeleton for KeyValueTable
+- [x] Step 5: Edit `app/page.tsx` — Conditionally render skeletons during upload in same grid layout
 
-## Step 3: Verify and test
-- [x] Build runs successfully
-- [x] All existing functionality preserved
+## Done
+
+All skeleton components created. Page.tsx updated to show skeletons during `isUploading` state.
+
+- ✅ `StatCardSkeleton` — 4-card grid with pulsing bars matching StatCard padding
+- ✅ `ChartSkeleton` — Decorative bar icon + label in chart-sized container (h-[220px] sm:h-[320px])
+- ✅ `TableSkeleton` — Configurable header + rows with alternating backgrounds
+- ✅ Page.tsx renders full skeleton layout during upload:
+  - 4 StatCard skeletons in grid-cols-4
+  - Missing Values SectionCard skeleton (chart + 5-row 2-column table)
+  - Data Types SectionCard skeleton (chart only)
+  - Correlation Heatmap SectionCard skeleton (chart)
+  - Summary Statistics SectionCard skeleton (9-column table, 4 rows)
+  - AI Summary SectionCard skeleton (3-line text block)
+- ⚠️ `Skeleton.tsx` created as reusable primitive library (SkeletonBar, SkeletonCircle, SkeletonBlock, SkeletonText)
 

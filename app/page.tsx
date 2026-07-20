@@ -9,6 +9,9 @@ import MissingValuesBarChart from "./components/MissingValuesBarChart";
 import DataTypesPieChart from "./components/DataTypesPieChart";
 import CorrelationHeatmap from "./components/CorrelationHeatmap";
 import AiSummaryCard from "./components/AiSummaryCard";
+import StatCardSkeleton from "./components/StatCardSkeleton";
+import ChartSkeleton from "./components/ChartSkeleton";
+import TableSkeleton from "./components/TableSkeleton";
 import UploadProgress, {
   type UploadStage,
   type UploadStatus,
@@ -388,6 +391,87 @@ export default function Home() {
                 </div>
               ) : null}
             </div>
+
+            {isUploading && !hasAnalysis ? (
+              <div className="mt-6">
+                {/* Stat card skeletons — same grid as real StatCards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <StatCardSkeleton />
+                  <StatCardSkeleton />
+                  <StatCardSkeleton />
+                  <StatCardSkeleton />
+                </div>
+
+                {/* Missing Values + Data Types skeletons — same lg:grid-cols-3 layout */}
+                <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="lg:col-span-2">
+                    <SectionCard
+                      title={<div className="animate-pulse rounded-md bg-gray-200 h-4 w-28" />}
+                      subtitle="Missing counts per column"
+                    >
+                      <div className="animate-pulse rounded-md bg-gray-200 h-3 w-48" />
+                      <div className="mt-3">
+                        <ChartSkeleton />
+                      </div>
+                      <div className="mt-3">
+                        <TableSkeleton rows={5} columns={2} />
+                      </div>
+                    </SectionCard>
+                  </div>
+
+                  <div>
+                    <SectionCard
+                      title={<div className="animate-pulse rounded-md bg-gray-200 h-4 w-20" />}
+                      subtitle="Data type distribution (grouped by dtype)"
+                    >
+                      <div className="mt-1 animate-pulse rounded-md bg-gray-200 h-3 w-40" />
+                      <div className="mt-3">
+                        <ChartSkeleton />
+                      </div>
+                    </SectionCard>
+                  </div>
+                </div>
+
+                {/* Correlation Heatmap + Summary Statistics skeletons — same lg:grid-cols-2 layout */}
+                <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <SectionCard
+                    title={<div className="animate-pulse rounded-md bg-gray-200 h-4 w-36" />}
+                    subtitle="Correlation matrix for numeric columns"
+                  >
+                    <ChartSkeleton />
+                  </SectionCard>
+
+                  <SectionCard
+                    title={<div className="animate-pulse rounded-md bg-gray-200 h-4 w-32" />}
+                    subtitle="Numeric columns summary"
+                  >
+                    <div className="animate-pulse rounded-md bg-gray-200 h-3 w-56" />
+                    <div className="mt-3">
+                      <TableSkeleton rows={4} columns={9} />
+                    </div>
+                  </SectionCard>
+                </div>
+
+                {/* AI Summary skeleton — same position as AiSummaryCard */}
+                <div className="mt-4">
+                  <SectionCard
+                    title={
+                      <div className="flex items-center gap-2">
+                        <div className="animate-pulse rounded-full bg-gray-200 h-9 w-9" />
+                        <div className="animate-pulse rounded-md bg-gray-200 h-4 w-36" />
+                      </div>
+                    }
+                    subtitle="AI-generated insights from your dataset"
+                  >
+                    <div className="rounded-2xl border border-gray-200 p-4">
+                      <div className="animate-pulse rounded-md bg-gray-200 h-3 w-full mb-2" />
+                      <div className="animate-pulse rounded-md bg-gray-200 h-3 w-5/6 mb-2" />
+                      <div className="animate-pulse rounded-md bg-gray-200 h-3 w-4/6" />
+                    </div>
+                  </SectionCard>
+                </div>
+              </div>
+            ) : null}
 
             {!hasAnalysis && !isUploading && !file ? (
               <div className="mt-8">
