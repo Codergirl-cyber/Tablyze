@@ -17,6 +17,7 @@ import UploadProgress, {
   type UploadStatus,
 } from "./components/UploadProgress";
 import { StaggerContainer } from "./components/AnimatedContainer";
+import ExportReportButton from "./components/ExportReportButton";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -30,6 +31,8 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const processingRef = useRef(false);
   const stageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dashboardRef = useRef<HTMLDivElement | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const formatFileLabel = (file: File) => `${file.name} • ${(file.size / 1024).toFixed(1)} KB`;
   const isCsvFile = (candidate: File | null) => {
@@ -374,6 +377,15 @@ export default function Home() {
                     {isUploading ? "Analyzing…" : "Upload"}
                   </button>
 
+                  <ExportReportButton
+                    dashboardRef={dashboardRef}
+                    fileName={selectedFileName?.split(" • ")[0] || file?.name || "dataset"}
+                    hasAnalysis={hasAnalysis}
+                    isExporting={isExporting}
+                    onExportStart={() => setIsExporting(true)}
+                    onExportEnd={() => setIsExporting(false)}
+                  />
+
                   {file ? (
                     <div className="text-sm text-gray-600">
                       Selected: <span className="font-medium text-gray-900">{selectedFileName}</span>
@@ -494,10 +506,10 @@ export default function Home() {
               </div>
             ) : null}
 
-            {hasAnalysis ? (
+{hasAnalysis ? (
               <StaggerContainer>
-                <div className="mt-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div ref={dashboardRef} className="mt-6">
+                  <div data-export-section="stat-cards" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard
                       label="Total Rows"
                       value={derived?.rows ?? "—"}
@@ -521,7 +533,7 @@ export default function Home() {
                   </div>
 
                   <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2" data-export-section="missing-values">
                       <SectionCard title="Missing Values" subtitle="Missing counts per column">
                         <div className="text-sm text-gray-600">
                           <span className="font-mono text-gray-900">missing_values</span> missing
@@ -544,7 +556,7 @@ export default function Home() {
                       </SectionCard>
                     </div>
 
-                    <div>
+                    <div data-export-section="data-types">
                       <SectionCard title="Data Types" subtitle="Data type distribution (grouped by dtype)">
                         <div className="mt-1 text-sm text-gray-600">
                           Distribution of column counts grouped by data type.
@@ -559,30 +571,34 @@ export default function Home() {
                   </div>
 
                   <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <SectionCard title="Correlation Heatmap" subtitle="Correlation matrix for numeric columns">
-                      <CorrelationHeatmap
-                        correlationMatrix={
-                          (derived?.correlationMatrix as Record<string, Record<string, number>>)
-                        }
-                      />
-                    </SectionCard>
+                    <div data-export-section="correlation">
+                      <SectionCard title="Correlation Heatmap" subtitle="Correlation matrix for numeric columns">
+                        <CorrelationHeatmap
+                          correlationMatrix={
+                            (derived?.correlationMatrix as Record<string, Record<string, number>>)
+                          }
+                        />
+                      </SectionCard>
+                    </div>
 
-                    <SectionCard title="Summary Statistics" subtitle="Numeric columns summary">
-                      <div className="text-sm text-gray-600">
-                        Table derived from <span className="font-mono text-gray-900">numeric_summary</span>.
-                      </div>
-                      <div className="mt-3">
-                        <KeyValueTable rows={derived?.summaryRows || []} />
-                      </div>
-                    </SectionCard>
+                    <div data-export-section="summary-stats">
+                      <SectionCard title="Summary Statistics" subtitle="Numeric columns summary">
+                        <div className="text-sm text-gray-600">
+                          Table derived from <span className="font-mono text-gray-900">numeric_summary</span>.
+                        </div>
+                        <div className="mt-3">
+                          <KeyValueTable rows={derived?.summaryRows || []} />
+                        </div>
+                      </SectionCard>
+                    </div>
                   </div>
+
+                  {hasUploadResult ? (
+                    <div className="mt-4" data-export-section="ai-summary">
+                      <AiSummaryCard summary={summaryToShow ?? undefined} error={uploadError} />
+                    </div>
+                  ) : null}
                 </div>
-
-                {hasUploadResult ? (
-                  <div className="mt-4">
-                    <AiSummaryCard summary={summaryToShow ?? undefined} error={uploadError} />
-                  </div>
-                ) : null}
               </StaggerContainer>
             ) : null}
           </DashboardShell>

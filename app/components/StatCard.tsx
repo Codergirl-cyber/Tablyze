@@ -23,8 +23,8 @@ export default function StatCard({
         transition: { type: "spring", stiffness: 300, damping: 20 },
       }}
     >
-      <div className="text-sm text-gray-600 font-medium">{label}</div>
-      <div className="mt-1 text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight leading-tight">
+      <div className="text-sm text-gray-600 font-medium" data-stat-label>{label}</div>
+      <div className="mt-1 text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight leading-tight" data-stat-value>
         {value}
       </div>
       {hint ? <div className="mt-2 text-xs text-gray-500">{hint}</div> : null}
