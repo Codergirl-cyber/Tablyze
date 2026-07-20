@@ -5,47 +5,57 @@ from fastapi.responses import JSONResponse
 import traceback
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
-from dotenv import load_dotenv, find_dotenv
 import os
 from groq import Groq
 from cache import RedisCache
 
+# Configure structured logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Environment variable handling
+# On Vercel: env vars are injected by Vercel Dashboard, NOT from .env files.
+# On local dev: export GROQ_API_KEY=... or use a backend/.env file manually.
+# We do NOT call load_dotenv() here because in Vercel serverless it can
+# accidentally load stale/shadow .env files and override Dashboard vars.
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Initialise the Redis cache (fails gracefully if Redis is unavailable)
 # ---------------------------------------------------------------------------
 cache = RedisCache()
 
-# Load environment variables from .env, .env.local, or backend/.env
-for env_file in [".env", ".env.local", "backend/.env"]:
-    dotenv_path = find_dotenv(env_file, usecwd=True)
-    if dotenv_path:
-        load_dotenv(dotenv_path)
-        print(f"Loaded environment variables from {dotenv_path}")
-        break
-else:
-    print("Warning: .env, .env.local, or backend/.env file not found. GROQ_API_KEY may be missing.")
-
 # Initialize Groq client
 groq_client = None
 groq_api_key = os.getenv("GROQ_API_KEY")
 if not groq_api_key:
-    print("Warning: GROQ_API_KEY is missing. Groq client not configured.")
+    logger.warning("GROQ_API_KEY is missing. Groq client not configured. "
+                    "Set this env var in Vercel Dashboard for the backend project.")
 else:
     try:
         groq_client = Groq(api_key=groq_api_key)
+        logger.info("Groq client initialized successfully.")
     except Exception as e:
-        # Delay failure: log the error and allow the app to run without Groq.
-        # generate_summary will handle a missing client gracefully.
-        print("Warning: Groq client initialization failed:", str(e))
+        logger.warning("Groq client initialization failed: %s", str(e))
+
+# ---------------------------------------------------------------------------
+# CORS Configuration
+# Dynamically read allowed origins from env var, or use sensible defaults.
+# For Vercel, set CORS_ORIGINS in the backend Dashboard to your frontend URL.
+# ---------------------------------------------------------------------------
+cors_origins_str = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,https://tablyze.vercel.app,https://tablyze-cssx.vercel.app"
+)
+allowed_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+logger.info("CORS allowed origins: %s", allowed_origins)
 
 app = FastAPI()
 
-# Allow frontend (Next.js)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","https://tablyze.vercel.app",],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

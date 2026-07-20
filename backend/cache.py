@@ -33,8 +33,8 @@ class RedisCache:
             self._client = redis_lib.from_url(
                 redis_url,
                 decode_responses=True,
-                socket_connect_timeout=2,
-                socket_timeout=2,
+                socket_connect_timeout=1,
+                socket_timeout=1,
             )
             # Verify connectivity with a lightweight ping
             self._client.ping()
