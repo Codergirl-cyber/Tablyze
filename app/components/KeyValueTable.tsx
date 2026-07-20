@@ -1,4 +1,7 @@
+"use client";
+
 import React from "react";
+import { motion } from "framer-motion";
 
 type Row = Record<string, React.ReactNode>;
 
@@ -11,6 +14,19 @@ function toRenderable(value: unknown): React.ReactNode {
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
+
+const rowVariants = {
+  hidden: { opacity: 0, y: 8 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      delay: i * 0.04,
+      duration: 0.3,
+      ease: "easeOut" as const,
+    },
+  }),
+};
 
 export default function KeyValueTable({
   rows,
@@ -49,8 +65,13 @@ export default function KeyValueTable({
         </thead>
         <tbody>
           {rows.map((r, idx) => (
-            <tr
+            <motion.tr
               key={idx}
+              custom={idx}
+              variants={rowVariants}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-10px" }}
               className={idx % 2 === 0 ? "border-b border-gray-50 bg-white" : "border-b border-gray-50 bg-gray-50"}
             >
               {headers.map((h) => (
@@ -58,7 +79,7 @@ export default function KeyValueTable({
                   {toRenderable(r[h])}
                 </td>
               ))}
-            </tr>
+            </motion.tr>
           ))}
         </tbody>
       </table>

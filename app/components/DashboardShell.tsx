@@ -1,4 +1,8 @@
+"use client";
+
 import React from "react";
+import { motion } from "framer-motion";
+import { fadeInUp } from "./AnimatedContainer";
 
 export default function DashboardShell({
   title,
@@ -11,7 +15,12 @@ export default function DashboardShell({
 }) {
   return (
     <div className="w-full">
-      <div className="mb-6 sm:mb-8">
+      <motion.div
+        className="mb-6 sm:mb-8"
+        variants={fadeInUp}
+        initial="hidden"
+        animate="visible"
+      >
         <div className="flex items-baseline justify-between gap-4">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
             {title}
@@ -22,7 +31,7 @@ export default function DashboardShell({
             {subtitle}
           </p>
         ) : null}
-      </div>
+      </motion.div>
       {children}
     </div>
   );

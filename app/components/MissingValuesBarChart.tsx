@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { motion } from "framer-motion";
+import { fadeIn } from "./AnimatedContainer";
 import {
   ResponsiveContainer,
   BarChart,
@@ -41,7 +43,12 @@ export default function MissingValuesBarChart({
   }
 
   return (
-    <div className="w-full h-[220px] sm:h-[320px]">
+    <motion.div
+      className="w-full h-[220px] sm:h-[320px]"
+      variants={fadeIn}
+      initial="hidden"
+      animate="visible"
+    >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 10, right: 16, left: 0, bottom: 40 }}>
           <XAxis
@@ -59,9 +66,13 @@ export default function MissingValuesBarChart({
           <Bar dataKey="missing" name="Missing" fill="#111827" />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </motion.div>
   );
 }
+
+
+
+
 
 
 

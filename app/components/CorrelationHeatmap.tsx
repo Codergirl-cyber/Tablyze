@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { motion } from "framer-motion";
+import { fadeIn } from "./AnimatedContainer";
 
 type CorrelationMatrix = Record<string, Record<string, number>>;
 
@@ -107,7 +109,12 @@ export default function CorrelationHeatmap({
 
 
   return (
-    <div className="w-full overflow-auto">
+    <motion.div
+      className="w-full overflow-auto"
+      variants={fadeIn}
+      initial="hidden"
+      animate="visible"
+    >
       <div className="min-w-[520px]">
         <div
           className="grid gap-px bg-gray-200"
@@ -152,7 +159,7 @@ export default function CorrelationHeatmap({
           ))}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

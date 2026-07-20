@@ -16,6 +16,7 @@ import UploadProgress, {
   type UploadStage,
   type UploadStatus,
 } from "./components/UploadProgress";
+import { StaggerContainer } from "./components/AnimatedContainer";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -494,107 +495,95 @@ export default function Home() {
             ) : null}
 
             {hasAnalysis ? (
-              <div className="mt-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard
-                    label="Total Rows"
-                    value={derived?.rows ?? "—"}
-                    hint="Total records"
-                  />
-                  <StatCard
-                    label="Total Columns"
-                    value={derived?.columns ?? "—"}
-                    hint="Total features"
-                  />
-                  <StatCard
-                    label="Missing Values"
-                    value={derived?.missingTotal ?? "—"}
-                    hint="Total null/NaN count"
-                  />
-                  <StatCard
-                    label="Duplicate Rows"
-                    value={derived?.duplicateRows ?? "—"}
-                    hint="Rows duplicated across all columns"
-                  />
-                </div>
-
-                <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div className="lg:col-span-2">
-                    <SectionCard
-                      title="Missing Values"
-                      subtitle="Missing counts per column"
-                    >
-                      <div className="text-sm text-gray-600">
-                        <span className="font-mono text-gray-900">missing_values</span> missing
-                        counts per column.
-                      </div>
-                      <div className="mt-3">
-                        <MissingValuesBarChart
-                          missingValues={
-                            (result?.missing_values as Record<string, number> | undefined) || {}
-                          }
-                        />
-                      </div>
-                      <div className="mt-3">
-                        <KeyValueTable
-                          rows={(derived?.missingValuesEntries || [])
-                            .slice(0, 10)
-                            .map((r) => ({ Column: r.column, Missing: r.missing }))}
-                        />
-                      </div>
-                    </SectionCard>
-                  </div>
-
-                  <div>
-                    <SectionCard
-                      title="Data Types"
-                      subtitle="Data type distribution (grouped by dtype)"
-                    >
-                      <div className="mt-1 text-sm text-gray-600">
-                        Distribution of column counts grouped by data type.
-                      </div>
-                      <div className="mt-3">
-                        <DataTypesPieChart
-                          dtypes={(result?.dtypes as Record<string, string> | undefined) || {}}
-                        />
-                      </div>
-                    </SectionCard>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <SectionCard
-                    title="Correlation Heatmap"
-                    subtitle="Correlation matrix for numeric columns"
-                  >
-                    <CorrelationHeatmap
-                      correlationMatrix={
-                        (derived?.correlationMatrix as Record<string, Record<string, number>>)
-                      }
+              <StaggerContainer>
+                <div className="mt-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <StatCard
+                      label="Total Rows"
+                      value={derived?.rows ?? "—"}
+                      hint="Total records"
                     />
-                  </SectionCard>
+                    <StatCard
+                      label="Total Columns"
+                      value={derived?.columns ?? "—"}
+                      hint="Total features"
+                    />
+                    <StatCard
+                      label="Missing Values"
+                      value={derived?.missingTotal ?? "—"}
+                      hint="Total null/NaN count"
+                    />
+                    <StatCard
+                      label="Duplicate Rows"
+                      value={derived?.duplicateRows ?? "—"}
+                      hint="Rows duplicated across all columns"
+                    />
+                  </div>
 
+                  <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div className="lg:col-span-2">
+                      <SectionCard title="Missing Values" subtitle="Missing counts per column">
+                        <div className="text-sm text-gray-600">
+                          <span className="font-mono text-gray-900">missing_values</span> missing
+                          counts per column.
+                        </div>
+                        <div className="mt-3">
+                          <MissingValuesBarChart
+                            missingValues={
+                              (result?.missing_values as Record<string, number> | undefined) || {}
+                            }
+                          />
+                        </div>
+                        <div className="mt-3">
+                          <KeyValueTable
+                            rows={(derived?.missingValuesEntries || [])
+                              .slice(0, 10)
+                              .map((r) => ({ Column: r.column, Missing: r.missing }))}
+                          />
+                        </div>
+                      </SectionCard>
+                    </div>
 
-                  <SectionCard
-                    title="Summary Statistics"
-                    subtitle="Numeric columns summary"
-                  >
-                    <div className="text-sm text-gray-600">
-                      Table derived from <span className="font-mono text-gray-900">numeric_summary</span>.
+                    <div>
+                      <SectionCard title="Data Types" subtitle="Data type distribution (grouped by dtype)">
+                        <div className="mt-1 text-sm text-gray-600">
+                          Distribution of column counts grouped by data type.
+                        </div>
+                        <div className="mt-3">
+                          <DataTypesPieChart
+                            dtypes={(result?.dtypes as Record<string, string> | undefined) || {}}
+                          />
+                        </div>
+                      </SectionCard>
                     </div>
-                    <div className="mt-3">
-                      <KeyValueTable rows={derived?.summaryRows || []} />
-                    </div>
-                  </SectionCard>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <SectionCard title="Correlation Heatmap" subtitle="Correlation matrix for numeric columns">
+                      <CorrelationHeatmap
+                        correlationMatrix={
+                          (derived?.correlationMatrix as Record<string, Record<string, number>>)
+                        }
+                      />
+                    </SectionCard>
+
+                    <SectionCard title="Summary Statistics" subtitle="Numeric columns summary">
+                      <div className="text-sm text-gray-600">
+                        Table derived from <span className="font-mono text-gray-900">numeric_summary</span>.
+                      </div>
+                      <div className="mt-3">
+                        <KeyValueTable rows={derived?.summaryRows || []} />
+                      </div>
+                    </SectionCard>
+                  </div>
                 </div>
 
-              </div>
-            ) : null}
-
-            {hasUploadResult ? (
-              <div className="mt-4">
-                <AiSummaryCard summary={summaryToShow ?? undefined} error={uploadError} />
-              </div>
+                {hasUploadResult ? (
+                  <div className="mt-4">
+                    <AiSummaryCard summary={summaryToShow ?? undefined} error={uploadError} />
+                  </div>
+                ) : null}
+              </StaggerContainer>
             ) : null}
           </DashboardShell>
         </div>

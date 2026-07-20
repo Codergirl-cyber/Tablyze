@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { motion } from "framer-motion";
+import { fadeIn } from "./AnimatedContainer";
 import {
   ResponsiveContainer,
   PieChart,
@@ -83,7 +85,12 @@ export default function DataTypesPieChart({ dtypes }: DtypesPieChartProps) {
   }
 
   return (
-    <div className="w-full h-[220px] sm:h-[320px]">
+    <motion.div
+      className="w-full h-[220px] sm:h-[320px]"
+      variants={fadeIn}
+      initial="hidden"
+      animate="visible"
+    >
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Tooltip
@@ -113,7 +120,7 @@ export default function DataTypesPieChart({ dtypes }: DtypesPieChartProps) {
           </Pie>
         </PieChart>
       </ResponsiveContainer>
-    </div>
+    </motion.div>
   );
 }
 

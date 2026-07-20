@@ -1,4 +1,8 @@
+"use client";
+
 import React from "react";
+import { motion } from "framer-motion";
+import { fadeInUp } from "./AnimatedContainer";
 
 export default function SectionCard({
   title,
@@ -10,7 +14,14 @@ export default function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white border border-gray-200 rounded-2xl shadow-sm">
+    <motion.section
+      variants={fadeInUp}
+      className="bg-white border border-gray-200 rounded-2xl shadow-sm"
+      whileHover={{
+        boxShadow: "0 12px 40px rgba(0, 0, 0, 0.1)",
+        transition: { type: "spring", stiffness: 300, damping: 20 },
+      }}
+    >
       <div className="px-4 sm:px-5 py-3 border-b border-gray-100">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -24,7 +35,7 @@ export default function SectionCard({
         </div>
       </div>
       <div className="p-4 sm:p-5">{children}</div>
-    </section>
+    </motion.section>
   );
 }
 
