@@ -35,7 +35,7 @@ export default function KeyValueTable({
 }) {
   if (!rows.length) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500 text-center">
         No rows to display.
       </div>
     );
@@ -53,10 +53,11 @@ export default function KeyValueTable({
       <table className="min-w-full text-sm">
         <thead>
           <tr className="text-left text-gray-600">
-            {headers.map((h) => (
+          {headers.map((h) => (
               <th
                 key={h}
-                className="px-3 py-2 font-semibold border-b border-gray-100 bg-white sticky top-0"
+                scope="col"
+                className="px-3 py-2 font-semibold border-b border-gray-100 bg-white sticky top-0 text-xs sm:text-sm text-gray-500 uppercase tracking-wide"
               >
                 {h}
               </th>

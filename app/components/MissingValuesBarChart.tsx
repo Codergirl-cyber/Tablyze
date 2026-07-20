@@ -36,7 +36,7 @@ export default function MissingValuesBarChart({
 
   if (!data.length || !hasAny) {
     return (
-      <div className="w-full h-[220px] sm:h-[320px] flex items-center justify-center rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm text-gray-600">
+      <div className="w-full h-[220px] sm:h-[320px] flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-4 text-sm text-gray-500">
         No missing values found.
       </div>
     );

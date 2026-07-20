@@ -15,7 +15,7 @@ export function SkeletonBar({
 }) {
   return (
     <div
-      className={`animate-pulse rounded-md bg-gray-200 ${className}`}
+      className={`animate-pulse rounded bg-gray-200 ${className}`}
       style={{ width, height }}
     />
   );
@@ -51,7 +51,7 @@ export function SkeletonBlock({
 }) {
   return (
     <div
-      className={`animate-pulse rounded-xl bg-gray-200 ${className}`}
+      className={`animate-pulse rounded-lg bg-gray-200 ${className}`}
       style={{ width: "100%", height }}
     />
   );

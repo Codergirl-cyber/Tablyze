@@ -101,7 +101,7 @@ export default function CorrelationHeatmap({
 
   if (!correlationMatrix || numericColsCount < 2 || orderedRows.length < 2) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500 text-center">
         Not enough numeric columns to compute a correlation heatmap.
       </div>
     );

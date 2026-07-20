@@ -19,7 +19,7 @@ export default function TableSkeleton({
         <div className="flex border-b border-gray-100 bg-white">
           {Array.from({ length: columns }).map((_, i) => (
             <div key={i} className="flex-1 px-3 py-2">
-              <div className="animate-pulse rounded-md bg-gray-200 h-3 w-16 sm:w-20" />
+              <div className="animate-pulse rounded bg-gray-200 h-3 w-16 sm:w-20" />
             </div>
           ))}
         </div>
@@ -34,7 +34,7 @@ export default function TableSkeleton({
             {Array.from({ length: columns }).map((_, ci) => (
               <div key={ci} className="flex-1 px-3 py-2">
                 <div
-                  className={`animate-pulse rounded-md bg-gray-200 h-3 ${
+                  className={`animate-pulse rounded bg-gray-200 h-3 ${
                     ci === 0 ? "w-20 sm:w-24" : "w-12 sm:w-16"
                   }`}
                 />

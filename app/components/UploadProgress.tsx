@@ -93,13 +93,13 @@ export default function UploadProgress({ currentStage, status }: UploadProgressP
   const hasError = status === "error";
 
   return (
-    <div className="mt-3 w-full">
-      <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-        <div className="flex items-start gap-3 mb-3">
+    <div className="mt-3 w-full" role="region" aria-label="Upload progress">
+      <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-5">
+        <div className="flex items-start gap-3 mb-3" aria-live="polite" aria-atomic="true">
           <div className="mt-0.5">
             {hasError ? (
               <div className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100">
-                <svg className="h-3 w-3 text-red-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <svg className="h-3 w-3 text-red-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
                 </svg>
               </div>

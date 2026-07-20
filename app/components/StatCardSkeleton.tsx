@@ -6,13 +6,13 @@ import React from "react";
  */
 export default function StatCardSkeleton() {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 sm:p-5">
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-5">
       {/* label */}
-      <div className="animate-pulse rounded-md bg-gray-200 h-3 w-20 sm:w-24" />
+      <div className="animate-pulse rounded bg-gray-200 h-3 w-20 sm:w-24" />
       {/* value */}
-      <div className="mt-3 animate-pulse rounded-md bg-gray-200 h-7 w-16 sm:w-20" />
+      <div className="mt-3 animate-pulse rounded bg-gray-200 h-7 w-16 sm:w-20" />
       {/* hint */}
-      <div className="mt-3 animate-pulse rounded-md bg-gray-200 h-2.5 w-28 sm:w-32" />
+      <div className="mt-2 animate-pulse rounded bg-gray-200 h-2.5 w-28 sm:w-32" />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import DashboardShell from "./components/DashboardShell";
 import KeyValueTable from "./components/KeyValueTable";
 import SectionCard from "./components/SectionCard";
@@ -130,19 +130,10 @@ export default function Home() {
     };
   }, [isUploading]);
 
-  const uploadFile = async () => {
-    console.log("uploadFile called");
-    console.log("Current file:", file);
+  const uploadFile = useCallback(async () => {
+    if (!file) return;
 
-    if (!file) {
-      console.log("No file selected");
-      return;
-    }
-
-    if (processingRef.current) {
-      console.log("Already processing, skipping duplicate upload");
-      return;
-    }
+    if (processingRef.current) return;
 
     let uploadSucceeded = false;
     let uploadFailed = false;
@@ -152,7 +143,6 @@ export default function Home() {
     setUploadStatus("processing");
     try {
       setIsUploading(true);
-      console.log("Uploading file...");
 
       const formData = new FormData();
       formData.append("file", file);
@@ -162,9 +152,7 @@ export default function Home() {
         body: formData,
       });
 
-      console.log("Response status:", res.status);
       const data = await res.json();
-      console.log("Response data:", data);
 
       if (!res.ok) {
         const message =
@@ -175,12 +163,10 @@ export default function Home() {
         setResult(null);
         uploadFailed = true;
       } else {
-        console.log("AI summary from response:", data?.ai_summary, data?.summary);
         setResult(data);
         uploadSucceeded = true;
       }
     } catch (err) {
-      console.error("Upload failed:", err);
       setUploadError(
         "Unable to upload the file right now. Please check your network and try again."
       );
@@ -195,7 +181,7 @@ export default function Home() {
       }
       processingRef.current = false;
     }
-  };
+  }, [file]);
 
   const derived = useMemo(() => {
     if (!result || typeof result !== "object") return null;
@@ -341,7 +327,7 @@ export default function Home() {
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
-                  className={`rounded-3xl border px-5 py-8 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-white ${
+                  className={`rounded-xl border px-5 py-8 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-white ${
                     dragActive
                       ? "border-gray-900 bg-gray-100"
                       : "border-gray-200 bg-white hover:border-gray-300"
@@ -399,8 +385,13 @@ export default function Home() {
               ) : null}
 
               {errorMessage ? (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                  {errorMessage}
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+                  <div className="flex items-start gap-2">
+                    <svg className="h-4 w-4 mt-0.5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                    </svg>
+                    <span>{errorMessage}</span>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -476,7 +467,7 @@ export default function Home() {
                     }
                     subtitle="AI-generated insights from your dataset"
                   >
-                    <div className="rounded-2xl border border-gray-200 p-4">
+                    <div className="rounded-xl border border-gray-200 p-4">
                       <div className="animate-pulse rounded-md bg-gray-200 h-3 w-full mb-2" />
                       <div className="animate-pulse rounded-md bg-gray-200 h-3 w-5/6 mb-2" />
                       <div className="animate-pulse rounded-md bg-gray-200 h-3 w-4/6" />
@@ -488,7 +479,7 @@ export default function Home() {
 
             {!hasAnalysis && !isUploading && !file ? (
               <div className="mt-8">
-                <div className="rounded-2xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white p-5 sm:p-7">
+                <div className="rounded-xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white p-5 sm:p-7">
                   <div className="text-sm font-medium text-gray-700">Get started</div>
                   <h3 className="mt-1 text-lg sm:text-xl font-semibold text-gray-900">
                     Upload a CSV to unlock insights

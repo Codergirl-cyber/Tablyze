@@ -1,28 +1,36 @@
-# Fix: AI summary not showing in deployed version
+# UI Polish TODO
 
-## Changes Made
+## Phase 1: Design Token Standardization ✅
+- [x] Fix body font to use Geist sans via CSS variables
+- [x] Add CSS custom properties for border-radius and spacing
+- [x] Update metadata title/description in layout.tsx
 
-### 1. `backend/main.py`
-- **Removed `load_dotenv()` calls** — In Vercel serverless, `.env` files can shadow Dashboard env vars. Now uses `os.getenv()` directly.
-- **Fixed CORS origins** — Changed from hardcoded list to dynamic via `CORS_ORIGINS` env var with sensible defaults including `https://tablyze-cssx.vercel.app`.
-- **Improved logging** — Added `logging.basicConfig`, structured logger messages for easier debugging.
+## Phase 2: Component Polish ✅
+- [x] SectionCard — Standardize border radius to rounded-xl, consistent padding
+- [x] StatCard — Standardize border radius to rounded-xl, consistent padding
+- [x] KeyValueTable — Add scope="col" to headers, improve empty state
+- [x] AiSummaryCard — Improve empty/error states, consistent radius
+- [x] UploadProgress — Add aria-live="polite" for announcements
+- [x] CorrelationHeatmap — Fix empty state text color
+- [x] DataTypesPieChart — Improve empty state styling
+- [x] MissingValuesBarChart — Improve empty state styling
+- [x] Skeleton components — Consistent border-radius (rounded-lg)
 
-### 2. `app/api/upload/route.ts`
-- **Added request timeout** — 60s AbortController timeout for backend processing.
-- **Better logging** — Logs the backend URL being called and response preview.
+## Phase 3: page.tsx Polish ✅
+- [x] Fix upload dropzone border radius (rounded-3xl → rounded-xl)
+- [x] Standardize empty state styling with rounded-xl
+- [x] Improve error state with icon + role="alert"
+- [x] Memoize uploadFile with useCallback
+- [x] Remove unused console.log statements
+- [x] Add useCallback import
 
-### 3. `backend/cache.py`
-- **🔧 PENDING: Optimize Redis** — Reduce connection timeout from 2s to 0.5s to avoid cold start delays on Vercel.
+## Phase 4: Remove Unused Code
+- [x] Remove unused Spinner import
+- [ ] Remove Spinner.tsx component file
+- [ ] Clean up supabase.ts if unused in frontend
 
-## Required Actions (user must do)
-
-### A. Backend Vercel Project
-Set these environment variables in Vercel Dashboard:
-- `GROQ_API_KEY` = your Groq API key
-- `CORS_ORIGINS` = `http://localhost:3000,https://YOUR_FRONTEND_URL.vercel.app`
-
-### B. Frontend Vercel Project
-Set these environment variables in Vercel Dashboard:
-- `BACKEND_URL` = `https://tablyze-cssx.vercel.app`
-- (or `NEXT_PUBLIC_API_URL` as an alias)
+## Phase 5: Responsive & Accessibility ✅
+- [x] Add aria-live regions for upload/processing states
+- [x] Add scope attributes to table headers everywhere
+- [x] Add global focus-visible styles for keyboard navigation
 

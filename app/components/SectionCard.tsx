@@ -16,7 +16,7 @@ export default function SectionCard({
   return (
     <motion.section
       variants={fadeInUp}
-      className="bg-white border border-gray-200 rounded-2xl shadow-sm"
+      className="bg-white border border-gray-200 rounded-xl shadow-sm"
       whileHover={{
         boxShadow: "0 12px 40px rgba(0, 0, 0, 0.1)",
         transition: { type: "spring", stiffness: 300, damping: 20 },
@@ -25,11 +25,11 @@ export default function SectionCard({
       <div className="px-4 sm:px-5 py-3 border-b border-gray-100">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 leading-tight">
+            <h2 className="text-sm sm:text-base font-semibold text-gray-900 leading-tight">
               {title}
             </h2>
             {subtitle ? (
-              <p className="mt-0.5 text-sm text-gray-600 leading-snug">{subtitle}</p>
+              <p className="mt-0.5 text-xs sm:text-sm text-gray-500 leading-snug">{subtitle}</p>
             ) : null}
           </div>
         </div>
