@@ -16,6 +16,64 @@ export default function Home() {
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const formatFileLabel = (file: File) => `${file.name} • ${(file.size / 1024).toFixed(1)} KB`;
+  const isCsvFile = (candidate: File | null) => {
+    if (!candidate) return false;
+    const fileName = candidate.name.toLowerCase();
+    return candidate.type === "text/csv" || fileName.endsWith(".csv");
+  };
+
+  const selectFile = (selected: File | null) => {
+    if (!selected) {
+      setFile(null);
+      setSelectedFileName(null);
+      return;
+    }
+
+    if (!isCsvFile(selected)) {
+      setUploadError("Please choose a valid CSV file.");
+      setFile(null);
+      setSelectedFileName(null);
+      return;
+    }
+
+    setUploadError(null);
+    setFile(selected);
+    setSelectedFileName(formatFileLabel(selected));
+    setResult(null);
+  };
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    selectFile(event.target.files?.[0] ?? null);
+    event.target.value = "";
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(false);
+    selectFile(event.dataTransfer.files?.[0] ?? null);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(false);
+  };
+
+  const handleDropZoneKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      fileInputRef.current?.click();
+    }
+  };
 
   const uploadFile = async () => {
     console.log("uploadFile called");
@@ -199,32 +257,58 @@ export default function Home() {
             subtitle="Upload a CSV and explore dataset profiling results."
           >
             <div className="flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <input
-                  type="file"
-                  accept=".csv"
-                  disabled={isUploading}
-                  onChange={(e) => {
-                    const selectedFile = e.target.files?.[0] || null;
-                    console.log("Selected file:", selectedFile);
-                    setFile(selectedFile);
-                    // Reset previous result when a new file is chosen.
-                    setResult(null);
-                    setUploadError(null);
-                  }}
-                  className="block w-full sm:w-auto text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:border-0 file:rounded-lg file:bg-gray-100 file:text-gray-900 hover:file:bg-gray-200 disabled:opacity-60"
-                />
-
-                <button
-                  className="px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-gray-800 active:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => {
-                    console.log("BUTTON CLICKED");
-                    uploadFile();
-                  }}
-                  disabled={!file || isUploading}
+              <div className="flex flex-col gap-4">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Upload CSV file"
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={handleDropZoneKeyDown}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  className={`rounded-3xl border px-5 py-8 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-white ${
+                    dragActive
+                      ? "border-gray-900 bg-gray-100"
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  }`}
                 >
-                  {isUploading ? "Analyzing…" : "Upload"}
-                </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    disabled={isUploading}
+                    onChange={handleInputChange}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-2 text-center">
+                    <span className="text-sm font-semibold text-gray-900">
+                      Drag and drop a CSV file here, or click to browse
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      Only CSV files are accepted.
+                    </span>
+                    <span className="mt-2 inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+                      {selectedFileName ?? "No file selected"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    className="px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-gray-800 active:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={uploadFile}
+                    disabled={!file || isUploading}
+                  >
+                    {isUploading ? "Analyzing…" : "Upload"}
+                  </button>
+
+                  {file ? (
+                    <div className="text-sm text-gray-600">
+                      Selected: <span className="font-medium text-gray-900">{selectedFileName}</span>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               {isUploading ? (
