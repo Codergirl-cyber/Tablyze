@@ -1,13 +1,25 @@
-# TODO
+# Implementation Steps - Upload Progress Enhancement
 
-- [x] Create responsive + polished empty states (before CSV upload) in app/page.tsx
-- [x] Add loading state while analysis/upload is in progress in app/page.tsx
-- [x] Improve spacing/alignment/visual hierarchy across DashboardShell, SectionCard, StatCard
-- [ ] Make chart/table card layouts more responsive for mobile/tablet in app/page.tsx and SectionCard
-- [x] Add friendly “insufficient data” empty messaging inside each chart component
-- [x] Improve KeyValueTable spacing/typography and horizontal scrolling on small screens
-- [x] Ensure all charts are wrapped in ResponsiveContainer with responsive heights
-- [ ] Run lint/build to verify no TS/JSX or recharts issues
+## Step 1: Create `app/components/UploadProgress.tsx`
+- [x] Create step-based progress component with stages:
+  - Uploading CSV...
+  - Parsing dataset...
+  - Computing statistics...
+  - Generating AI summary...
+  - Finalizing dashboard...
+- [x] Show only one active stage at a time with animated loading indicator
+- [x] Show checkmark for completed stages
+- [x] Show error state with X icon when upload fails
+- [x] Accept `currentStage` prop and `error` prop
 
+## Step 2: Update `app/page.tsx`
+- [x] Import and use `UploadProgress` component
+- [x] Add stage state machine (`useRef` for elapsed time tracking + `useState` for current stage)
+- [x] Replace existing `isUploading` Spinner + skeleton loader with `UploadProgress`
+- [x] Prevent duplicate uploads using `processingRef`
+- [x] Handle errors gracefully — map to the failed stage
 
+## Step 3: Verify and test
+- [x] Build runs successfully
+- [x] All existing functionality preserved
 

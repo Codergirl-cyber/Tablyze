@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import DashboardShell from "./components/DashboardShell";
 import KeyValueTable from "./components/KeyValueTable";
 import SectionCard from "./components/SectionCard";
@@ -9,7 +9,10 @@ import MissingValuesBarChart from "./components/MissingValuesBarChart";
 import DataTypesPieChart from "./components/DataTypesPieChart";
 import CorrelationHeatmap from "./components/CorrelationHeatmap";
 import AiSummaryCard from "./components/AiSummaryCard";
-import Spinner from "./components/Spinner";
+import UploadProgress, {
+  type UploadStage,
+  type UploadStatus,
+} from "./components/UploadProgress";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -18,7 +21,11 @@ export default function Home() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [currentStage, setCurrentStage] = useState<UploadStage>("uploading");
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const processingRef = useRef(false);
+  const stageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const formatFileLabel = (file: File) => `${file.name} • ${(file.size / 1024).toFixed(1)} KB`;
   const isCsvFile = (candidate: File | null) => {
@@ -75,6 +82,47 @@ export default function Home() {
     }
   };
 
+  // Stage progression based on elapsed time
+  useEffect(() => {
+    if (!isUploading) {
+      if (stageTimerRef.current) {
+        clearInterval(stageTimerRef.current);
+        stageTimerRef.current = null;
+      }
+      return;
+    }
+
+    const STAGE_MILESTONES: { stage: UploadStage; ms: number }[] = [
+      { stage: "uploading", ms: 0 },
+      { stage: "parsing", ms: 1500 },
+      { stage: "computing", ms: 4000 },
+      { stage: "generating", ms: 7000 },
+    ];
+
+    setCurrentStage("uploading");
+    setUploadStatus("processing");
+    const startTime = Date.now();
+
+    stageTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      // Find the last milestone that we've passed
+      let newStage: UploadStage = "generating";
+      for (const m of STAGE_MILESTONES) {
+        if (elapsed >= m.ms) {
+          newStage = m.stage;
+        }
+      }
+      setCurrentStage(newStage);
+    }, 300);
+
+    return () => {
+      if (stageTimerRef.current) {
+        clearInterval(stageTimerRef.current);
+        stageTimerRef.current = null;
+      }
+    };
+  }, [isUploading]);
+
   const uploadFile = async () => {
     console.log("uploadFile called");
     console.log("Current file:", file);
@@ -84,7 +132,17 @@ export default function Home() {
       return;
     }
 
+    if (processingRef.current) {
+      console.log("Already processing, skipping duplicate upload");
+      return;
+    }
+
+    let uploadSucceeded = false;
+    let uploadFailed = false;
+
+    processingRef.current = true;
     setUploadError(null);
+    setUploadStatus("processing");
     try {
       setIsUploading(true);
       console.log("Uploading file...");
@@ -108,9 +166,11 @@ export default function Home() {
             : "Unable to upload the file at this time. Please try again.";
         setUploadError(message);
         setResult(null);
+        uploadFailed = true;
       } else {
         console.log("AI summary from response:", data?.ai_summary, data?.summary);
         setResult(data);
+        uploadSucceeded = true;
       }
     } catch (err) {
       console.error("Upload failed:", err);
@@ -118,8 +178,15 @@ export default function Home() {
         "Unable to upload the file right now. Please check your network and try again."
       );
       setResult(null);
+      uploadFailed = true;
     } finally {
       setIsUploading(false);
+      if (uploadFailed) {
+        setUploadStatus("error");
+      } else if (uploadSucceeded) {
+        setUploadStatus("done");
+      }
+      processingRef.current = false;
     }
   };
 
@@ -312,10 +379,7 @@ export default function Home() {
               </div>
 
               {isUploading ? (
-                <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
-                  <Spinner className="h-4 w-4 text-gray-600" />
-                  Generating AI summary...
-                </div>
+                <UploadProgress currentStage={currentStage} status={uploadStatus} />
               ) : null}
 
               {errorMessage ? (
@@ -340,37 +404,6 @@ export default function Home() {
                     <div className="inline-flex items-center rounded-lg bg-white border border-gray-200 px-3 py-2 text-sm text-gray-700">
                       Tip: Try <span className="font-mono">sample.csv</span>
                     </div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {isUploading ? (
-              <div className="mt-6">
-                <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1 h-2.5 w-2.5 rounded-full bg-gray-900 animate-pulse" />
-                    <div>
-                      <div className="text-base font-semibold text-gray-900">
-                        Analyzing your dataset…
-                      </div>
-                      <div className="mt-1 text-sm text-gray-600">
-                        Computing summaries, distributions, and correlations.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {Array.from({ length: 4 }).map((_, idx) => (
-                      <div
-                        key={idx}
-                        className="rounded-xl border border-gray-200 bg-gray-50 p-4 animate-pulse"
-                      >
-                        <div className="h-3 w-1/2 rounded bg-gray-200" />
-                        <div className="mt-3 h-6 w-2/3 rounded bg-gray-200" />
-                        <div className="mt-2 h-3 w-1/3 rounded bg-gray-200" />
-                      </div>
-                    ))}
                   </div>
                 </div>
               </div>
