@@ -1,10 +1,8 @@
-# PDF Export Implementation - Complete
+# Redis Caching Implementation - Progress
 
-## Steps
+- [x] Step 1: Get user approval on the plan
+- [x] Step 2: Create `backend/cache.py` — Redis caching module
+- [x] Step 3: Edit `backend/main.py` — Integrate caching in `/upload` endpoint
+- [x] Step 4: Edit `backend/requirements.txt` — Add `redis` dependency
+- [x] Step 5: Install dependencies and test
 
-- [x] Install dependencies (jspdf, html2canvas)
-- [x] Create `app/components/ExportReportButton.tsx`
-- [x] Modify `app/page.tsx` - add refs and Export button
-- [x] Modify `app/components/StatCard.tsx` - add data attributes for PDF extraction
-- [x] Add `data-export-section` attributes to all dashboard sections
-- [x] Attach `dashboardRef` to analysis container

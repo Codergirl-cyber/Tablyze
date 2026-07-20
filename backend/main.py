@@ -1,3 +1,5 @@
+import io
+import logging
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 import traceback
@@ -6,6 +8,14 @@ import pandas as pd
 from dotenv import load_dotenv, find_dotenv
 import os
 from groq import Groq
+from cache import RedisCache
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Initialise the Redis cache (fails gracefully if Redis is unavailable)
+# ---------------------------------------------------------------------------
+cache = RedisCache()
 
 # Load environment variables from .env, .env.local, or backend/.env
 for env_file in [".env", ".env.local", "backend/.env"]:
@@ -176,7 +186,23 @@ async def upload(file: UploadFile = File(...)):
         return val
 
     try:
-        df = pd.read_csv(file.file)
+        # Read the raw CSV bytes for caching purposes
+        csv_bytes = await file.read()
+
+        # ------------------------------------------------------------------
+        # Try fetching cached analysis results for this exact CSV content
+        # ------------------------------------------------------------------
+        try:
+            cached = cache.get(csv_bytes)
+            if cached is not None:
+                logger.info("Cache HIT — returning cached analysis")
+                return cached
+            logger.info("Cache MISS — performing fresh analysis")
+        except Exception as exc:
+            logger.warning("Cache lookup failed — proceeding with analysis: %s", exc)
+
+        # Parse CSV from bytes
+        df = pd.read_csv(io.BytesIO(csv_bytes))
 
         total_rows = len(df)
         missing_series = df.isna().sum(axis=0)
@@ -289,7 +315,7 @@ async def upload(file: UploadFile = File(...)):
         except Exception:
             ai_summary = "AI summary unavailable."
 
-        return {
+        result = {
             "rows": df.shape[0],
             "columns": df.shape[1],
             "column_names": list(df.columns),
@@ -301,6 +327,16 @@ async def upload(file: UploadFile = File(...)):
             "categorical_top_frequencies": categorical_top_frequencies,
             "ai_summary": ai_summary,
         }
+
+        # ------------------------------------------------------------------
+        # Store the analysis result in the cache for future requests
+        # ------------------------------------------------------------------
+        try:
+            cache.set(csv_bytes, result)
+        except Exception as exc:
+            logger.warning("Failed to cache analysis result: %s", exc)
+
+        return result
 
 
 
