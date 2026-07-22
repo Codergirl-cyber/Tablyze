@@ -22,7 +22,7 @@ export default function SectionCard({
         transition: { type: "spring", stiffness: 300, damping: 20 },
       }}
     >
-      <div className="px-4 sm:px-5 py-3 border-b border-gray-100">
+      <div className="px-5 sm:px-6 py-4 border-b border-gray-100">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm sm:text-base font-semibold text-gray-900 leading-tight">
@@ -34,7 +34,7 @@ export default function SectionCard({
           </div>
         </div>
       </div>
-      <div className="p-4 sm:p-5">{children}</div>
+      <div className="p-5 sm:p-6">{children}</div>
     </motion.section>
   );
 }

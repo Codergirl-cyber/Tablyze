@@ -16,7 +16,7 @@ export default function StatCard({
   return (
     <motion.div
       variants={fadeInUp}
-      className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-5"
+      className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 sm:p-6"
       whileHover={{
         scale: 1.02,
         boxShadow: "0 8px 30px rgba(0, 0, 0, 0.08)",

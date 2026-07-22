@@ -310,7 +310,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50 text-black p-4 sm:p-6">
-      <div className="w-full max-w-6xl mx-auto">
+      <div className="w-full max-w-5xl mx-auto">
         <div className="bg-white shadow-sm border border-gray-200 rounded-2xl p-4 sm:p-6">
           <DashboardShell
             title="Tablyze"
@@ -561,7 +561,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div data-export-section="correlation">
                       <SectionCard title="Correlation Heatmap" subtitle="Correlation matrix for numeric columns">
                         <CorrelationHeatmap
@@ -585,7 +585,7 @@ export default function Home() {
                   </div>
 
                   {hasUploadResult ? (
-                    <div className="mt-4" data-export-section="ai-summary">
+                    <div className="mt-6" data-export-section="ai-summary">
                       <AiSummaryCard summary={summaryToShow ?? undefined} error={uploadError} />
                     </div>
                   ) : null}

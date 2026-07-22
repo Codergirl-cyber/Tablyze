@@ -8,8 +8,8 @@
   --radius-lg: 0.75rem;    /* rounded-lg  */
   --radius-xl: 1rem;       /* rounded-xl  */
   --radius-2xl: 1.5rem;    /* rounded-2xl */
-  --spacing-section: 1.5rem;  /* 24px */
-  --spacing-card-gap: 1rem;   /* 16px */
+  --spacing-section: 2rem;    /* 32px */
+  --spacing-card-gap: 1.25rem; /* 20px */
 }
 
 @theme inline {

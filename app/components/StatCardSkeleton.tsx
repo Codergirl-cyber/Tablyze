@@ -6,7 +6,7 @@ import React from "react";
  */
 export default function StatCardSkeleton() {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-5">
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 sm:p-6">
       {/* label */}
       <div className="animate-pulse rounded bg-gray-200 h-3 w-20 sm:w-24" />
       {/* value */}
