@@ -17,6 +17,7 @@ import UploadProgress, {
   type UploadStatus,
 } from "./components/UploadProgress";
 import FileCard from "./components/FileCard";
+import OnboardingSection from "./components/OnboardingSection";
 import { StaggerContainer } from "./components/AnimatedContainer";
 import ExportReportButton from "./components/ExportReportButton";
 
@@ -89,6 +90,18 @@ export default function Home() {
       fileInputRef.current?.click();
     }
   };
+
+  const handleLoadSample = useCallback(async () => {
+    if (processingRef.current) return;
+    try {
+      const res = await fetch("/sample.csv");
+      const blob = await res.blob();
+      const sampleFile = new File([blob], "sample.csv", { type: "text/csv" });
+      selectFile(sampleFile);
+    } catch {
+      setUploadError("Could not load the sample CSV. Please try uploading a file manually.");
+    }
+  }, []);
 
   // Stage progression based on elapsed time
   useEffect(() => {
@@ -574,23 +587,7 @@ export default function Home() {
             ) : null}
 
             {!hasAnalysis && !isUploading && !file ? (
-              <div className="mt-8">
-                <div className="rounded-xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white p-5 sm:p-7">
-                  <div className="text-sm font-medium text-gray-700">Get started</div>
-                  <h3 className="mt-1 text-lg sm:text-xl font-semibold text-gray-900">
-                    Upload a CSV to unlock insights
-                  </h3>
-                  <p className="mt-2 text-sm sm:text-base text-gray-600 max-w-2xl">
-                    You’ll see missing values, data types, correlation heatmaps, and summary
-                    statistics.
-                  </p>
-                  <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center">
-                    <div className="inline-flex items-center rounded-lg bg-white border border-gray-200 px-3 py-2 text-sm text-gray-700">
-                      Tip: Try <span className="font-mono">sample.csv</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <OnboardingSection onLoadSample={handleLoadSample} />
             ) : null}
 
 {hasAnalysis ? (
