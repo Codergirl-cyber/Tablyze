@@ -21,8 +21,8 @@ const rowVariants = {
     opacity: 1,
     y: 0,
     transition: {
-      delay: i * 0.04,
-      duration: 0.3,
+      delay: i * 0.03,
+      duration: 0.2,
       ease: "easeOut" as const,
     },
   }),
@@ -73,7 +73,7 @@ export default function KeyValueTable({
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true, margin: "-10px" }}
-              className={idx % 2 === 0 ? "border-b border-gray-50 bg-white" : "border-b border-gray-50 bg-gray-50"}
+              className={`${idx % 2 === 0 ? "border-b border-gray-50 bg-white" : "border-b border-gray-50 bg-gray-50"} transition-all duration-150 hover:bg-gray-100`}
             >
               {headers.map((h) => (
                 <td key={h} className="px-3 py-2 text-gray-900 whitespace-nowrap">

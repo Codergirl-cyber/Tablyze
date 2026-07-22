@@ -83,9 +83,9 @@ export default function OnboardingSection({
         <div className="px-6 sm:px-8 py-6 sm:py-7">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
             {features.map((feature) => (
-              <div key={feature.label} className="flex items-start gap-3">
+                <div key={feature.label} className="flex items-start gap-3 group">
                 {/* Icon */}
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-700">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-700 transition-all duration-200 group-hover:bg-gray-200 group-hover:text-gray-900 group-hover:scale-105">
                   <svg
                     className="h-4 w-4"
                     fill="none"

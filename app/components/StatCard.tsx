@@ -16,11 +16,11 @@ export default function StatCard({
   return (
     <motion.div
       variants={fadeInUp}
-      className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 sm:p-6"
+      className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 sm:p-6 hover:border-gray-300 hover:shadow-md transition-all duration-200"
       whileHover={{
         scale: 1.02,
         boxShadow: "0 8px 30px rgba(0, 0, 0, 0.08)",
-        transition: { type: "spring", stiffness: 300, damping: 20 },
+        transition: { type: "spring", stiffness: 400, damping: 25 },
       }}
     >
       <div className="text-xs sm:text-sm text-gray-500 font-medium tracking-wide uppercase" data-stat-label>{label}</div>

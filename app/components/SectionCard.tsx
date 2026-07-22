@@ -16,10 +16,10 @@ export default function SectionCard({
   return (
     <motion.section
       variants={fadeInUp}
-      className="bg-white border border-gray-200 rounded-xl shadow-sm"
+      className="bg-white border border-gray-200 rounded-xl shadow-sm hover:border-gray-300 transition-all duration-200"
       whileHover={{
         boxShadow: "0 12px 40px rgba(0, 0, 0, 0.1)",
-        transition: { type: "spring", stiffness: 300, damping: 20 },
+        transition: { type: "spring", stiffness: 400, damping: 25 },
       }}
     >
       <div className="px-5 sm:px-6 py-4 border-b border-gray-100">

@@ -84,7 +84,7 @@ function StageLabel({ label, active, completed, errored }: { label: string; acti
 function StageConnector({ completed, errored }: { completed: boolean; errored: boolean }) {
   const bgColor = completed && !errored ? "bg-gray-900" : "bg-gray-300";
   return (
-    <div className={`ml-2.5 h-5 w-0.5 ${bgColor} transition-colors duration-300`} />
+    <div className={`ml-2.5 h-5 w-0.5 ${bgColor} transition-all duration-200`} />
   );
 }
 

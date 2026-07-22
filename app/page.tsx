@@ -341,9 +341,9 @@ export default function Home() {
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
-                  className={`group relative rounded-2xl border-2 border-dashed px-6 py-12 sm:py-16 transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-white ${
+                  className={`group relative rounded-2xl border-2 border-dashed px-6 py-12 sm:py-16 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-white ${
                     dragActive
-                      ? "border-gray-900 bg-gray-50 shadow-inner scale-[1.01]"
+                      ? "border-gray-900 bg-gray-50 shadow-inner scale-[1.015]"
                       : "border-gray-300 bg-gradient-to-b from-white to-gray-50/50 hover:border-gray-400 hover:shadow-sm hover:scale-[1.005]"
                   }`}
                 >

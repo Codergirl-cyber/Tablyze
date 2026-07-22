@@ -15,7 +15,7 @@ export function SkeletonBar({
 }) {
   return (
     <div
-      className={`animate-pulse rounded bg-gray-200 ${className}`}
+      className={`animate-pulse rounded bg-gray-200 transition-opacity duration-200 ${className}`}
       style={{ width, height }}
     />
   );
@@ -33,7 +33,7 @@ export function SkeletonCircle({
 }) {
   return (
     <div
-      className={`animate-pulse rounded-full bg-gray-200 ${className}`}
+      className={`animate-pulse rounded-full bg-gray-200 transition-opacity duration-200 ${className}`}
       style={{ width: size, height: size }}
     />
   );
@@ -51,7 +51,7 @@ export function SkeletonBlock({
 }) {
   return (
     <div
-      className={`animate-pulse rounded-lg bg-gray-200 ${className}`}
+      className={`animate-pulse rounded-lg bg-gray-200 transition-opacity duration-200 ${className}`}
       style={{ width: "100%", height }}
     />
   );

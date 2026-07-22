@@ -39,7 +39,7 @@ export default function AiSummaryCard({
           </div>
         ) : summary ? (
           <div
-            className={`rounded-lg border p-4 text-sm leading-6 ${
+            className={`rounded-lg border p-4 text-sm leading-6 transition-all duration-200 ${
               summary === "AI summary unavailable."
                 ? "bg-yellow-50 text-yellow-800 border-yellow-200"
                 : "bg-white text-gray-700 border-gray-200"

@@ -146,7 +146,7 @@ export default function CorrelationHeatmap({
                 return (
                   <div
                     key={`${r}__${c}`}
-                    className="px-2 py-1.5 flex flex-col items-start justify-center"
+                    className="px-2 py-1.5 flex flex-col items-start justify-center transition-all duration-150 hover:opacity-80"
                     style={{ backgroundColor: bg, color: textColor }}
                   >
                     <div className="text-[11px] font-medium leading-tight whitespace-nowrap">

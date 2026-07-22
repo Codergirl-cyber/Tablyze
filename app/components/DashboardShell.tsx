@@ -16,7 +16,7 @@ export default function DashboardShell({
   return (
     <div className="w-full">
       <motion.div
-        className="mb-6 sm:mb-8"
+        className="mb-6 sm:mb-8 transition-all duration-200"
         variants={fadeInUp}
         initial="hidden"
         animate="visible"

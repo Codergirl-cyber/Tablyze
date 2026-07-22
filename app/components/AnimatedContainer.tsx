@@ -12,7 +12,7 @@ export const fadeInUp: Variants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.45, ease: [0.25, 0.1, 0.25, 1] },
+    transition: { duration: 0.28, ease: [0.25, 0.1, 0.25, 1] },
   },
 };
 
@@ -20,7 +20,7 @@ export const fadeIn: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { duration: 0.4, ease: "easeOut" },
+    transition: { duration: 0.25, ease: "easeOut" },
   },
 };
 
@@ -29,8 +29,8 @@ export const staggerContainer: Variants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.1,
+      staggerChildren: 0.06,
+      delayChildren: 0.08,
       ease: "easeOut",
     },
   },
@@ -39,12 +39,12 @@ export const staggerContainer: Variants = {
 export const hoverScale = {
   scale: 1.02,
   boxShadow: "0 8px 30px rgba(0, 0, 0, 0.08)",
-  transition: { type: "spring" as const, stiffness: 300, damping: 20 },
+  transition: { type: "spring" as const, stiffness: 400, damping: 25 },
 };
 
 export const hoverLift = {
   boxShadow: "0 12px 40px rgba(0, 0, 0, 0.1)",
-  transition: { type: "spring" as const, stiffness: 300, damping: 20 },
+  transition: { type: "spring" as const, stiffness: 400, damping: 25 },
 };
 
 // ---------------------------------------------------------------------------
