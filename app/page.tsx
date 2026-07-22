@@ -16,6 +16,7 @@ import UploadProgress, {
   type UploadStage,
   type UploadStatus,
 } from "./components/UploadProgress";
+import FileCard from "./components/FileCard";
 import { StaggerContainer } from "./components/AnimatedContainer";
 import ExportReportButton from "./components/ExportReportButton";
 
@@ -385,28 +386,92 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    className="px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-gray-800 active:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={uploadFile}
-                    disabled={!file || isUploading}
-                  >
-                    {isUploading ? "Analyzing…" : "Upload"}
-                  </button>
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={uploadFile}
+                      disabled={!file || isUploading}
+                      className={`
+                        inline-flex items-center justify-center gap-2
+                        px-6 py-3 rounded-xl text-base font-semibold
+                        shadow-md hover:shadow-lg active:shadow-sm
+                        transition-all duration-200 ease-in-out
+                        focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2
+                        ${
+                          !file || isUploading
+                            ? "bg-gray-300 text-gray-500 cursor-not-allowed shadow-none"
+                            : "bg-gray-900 text-white hover:bg-gray-800 active:bg-gray-900 active:scale-[0.98]"
+                        }
+                      `}
+                    >
+                      {isUploading ? (
+                        <>
+                          <svg
+                            className="h-4 w-4 animate-spin"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                            />
+                          </svg>
+                          Analyzing…
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2}
+                            stroke="currentColor"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+                            />
+                          </svg>
+                          Upload
+                        </>
+                      )}
+                    </button>
 
-                  <ExportReportButton
-                    dashboardRef={dashboardRef}
-                    fileName={selectedFileName?.split(" • ")[0] || file?.name || "dataset"}
-                    hasAnalysis={hasAnalysis}
-                    isExporting={isExporting}
-                    onExportStart={() => setIsExporting(true)}
-                    onExportEnd={() => setIsExporting(false)}
-                  />
+                    <ExportReportButton
+                      dashboardRef={dashboardRef}
+                      fileName={selectedFileName?.split(" • ")[0] || file?.name || "dataset"}
+                      hasAnalysis={hasAnalysis}
+                      isExporting={isExporting}
+                      onExportStart={() => setIsExporting(true)}
+                      onExportEnd={() => setIsExporting(false)}
+                    />
+                  </div>
 
                   {file ? (
-                    <div className="text-sm text-gray-600">
-                      Selected: <span className="font-medium text-gray-900">{selectedFileName}</span>
-                    </div>
+                    <FileCard
+                      file={file}
+                      isUploading={isUploading}
+                      uploadStatus={uploadStatus}
+                      onRemove={() => {
+                        setFile(null);
+                        setSelectedFileName(null);
+                        setUploadError(null);
+                        setResult(null);
+                        setUploadStatus("idle");
+                      }}
+                    />
                   ) : null}
                 </div>
               </div>
