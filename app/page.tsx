@@ -327,10 +327,10 @@ export default function Home() {
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
-                  className={`rounded-xl border px-5 py-8 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-white ${
+                  className={`group relative rounded-2xl border-2 border-dashed px-6 py-12 sm:py-16 transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-white ${
                     dragActive
-                      ? "border-gray-900 bg-gray-100"
-                      : "border-gray-200 bg-white hover:border-gray-300"
+                      ? "border-gray-900 bg-gray-50 shadow-inner scale-[1.01]"
+                      : "border-gray-300 bg-gradient-to-b from-white to-gray-50/50 hover:border-gray-400 hover:shadow-sm hover:scale-[1.005]"
                   }`}
                 >
                   <input
@@ -341,15 +341,46 @@ export default function Home() {
                     onChange={handleInputChange}
                     className="hidden"
                   />
-                  <div className="flex flex-col items-center justify-center gap-2 text-center">
-                    <span className="text-sm font-semibold text-gray-900">
-                      Drag and drop a CSV file here, or click to browse
+                  <div className="flex flex-col items-center justify-center gap-3 text-center">
+                    {/* Upload icon */}
+                    <div className={`mb-1 flex h-14 w-14 items-center justify-center rounded-full transition-all duration-300 ${
+                      dragActive
+                        ? "bg-gray-900 text-white scale-110 shadow-lg"
+                        : "bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-700"
+                    }`}>
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                      </svg>
+                    </div>
+                    <span className="text-base font-semibold text-gray-900">
+                      Drag and drop your CSV here, or{" "}
+                      <span className="text-gray-900 underline underline-offset-2 decoration-gray-300 hover:decoration-gray-900 transition-all duration-200">
+                        browse files
+                      </span>
                     </span>
                     <span className="text-sm text-gray-500">
-                      Only CSV files are accepted.
+                      Only CSV files are accepted — up to 10 MB
                     </span>
-                    <span className="mt-2 inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
-                      {selectedFileName ?? "No file selected"}
+                    <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
+                      selectedFileName
+                        ? "bg-gray-900 text-white shadow-sm"
+                        : "bg-gray-100 text-gray-500"
+                    }`}>
+                      {selectedFileName ? (
+                        <>
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                          </svg>
+                          {selectedFileName}
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.75v6.75m0 0l-3-3m3 3l3-3m-8.25 6a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                          </svg>
+                          No file selected
+                        </>
+                      )}
                     </span>
                   </div>
                 </div>
