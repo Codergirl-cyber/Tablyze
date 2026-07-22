@@ -1,5 +1,6 @@
 import io
 import logging
+import time
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 import traceback
@@ -26,18 +27,40 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 cache = RedisCache()
 
-# Initialize Groq client
+# ---------------------------------------------------------------------------
+# Groq client initialisation with debug logging
+# ---------------------------------------------------------------------------
 groq_client = None
+groq_client_init_error = None
 groq_api_key = os.getenv("GROQ_API_KEY")
+
 if not groq_api_key:
-    logger.warning("GROQ_API_KEY is missing. Groq client not configured. "
-                    "Set this env var in Vercel Dashboard for the backend project.")
+    logger.warning(
+        "[DEBUG] GROQ_API_KEY env var is NOT SET (empty or missing). "
+        "Groq client will NOT be available. Make sure it is configured "
+        "in the Vercel Dashboard → Backend project → Environment Variables."
+    )
+    groq_client_init_error = "GROQ_API_KEY is not set"
 else:
+    # Mask the key for safe logging — show first 4 + last 4 chars
+    masked = groq_api_key[:4] + "****" + groq_api_key[-4:] if len(groq_api_key) > 8 else "****"
+    logger.info(
+        "[DEBUG] GROQ_API_KEY is SET (masked: %s, length=%d). Attempting Groq client init...",
+        masked,
+        len(groq_api_key),
+    )
     try:
         groq_client = Groq(api_key=groq_api_key)
-        logger.info("Groq client initialized successfully.")
+        logger.info("[DEBUG] Groq client initialized SUCCESSFULLY.")
     except Exception as e:
-        logger.warning("Groq client initialization failed: %s", str(e))
+        groq_client_init_error = str(e)
+        logger.warning(
+            "[DEBUG] Groq client initialization FAILED: %s",
+            e,
+            exc_info=True,  # includes full traceback in logs
+        )
+
+logger.info("[DEBUG] groq_client is None? %s", groq_client is None)
 
 # ---------------------------------------------------------------------------
 # CORS Configuration
@@ -72,8 +95,15 @@ def generate_summary(stats: dict) -> str:
     Returns:
         A string containing the generated summary or a friendly error message.
     """
+    logger.info("[DEBUG] generate_summary() CALLED. groq_client is None? %s", groq_client is None)
+    
     # If Groq client failed to initialize, avoid calling it and return a clear message.
     if groq_client is None:
+        logger.warning(
+            "[DEBUG] generate_summary() — groq_client is None. "
+            "Returning fallback message. groq_client_init_error=%s",
+            groq_client_init_error,
+        )
         return "Unable to generate summary at this moment. Error: Groq client not configured."
 
     try:
@@ -114,6 +144,7 @@ Your summary should:
 Provide your analysis as a bulleted list."""
         
         # Call Groq API with low temperature for consistency
+        logger.info("[DEBUG] generate_summary() — About to call Groq API (model=llama-3.1-8b-instant)...")
         message = groq_client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}],
@@ -121,9 +152,21 @@ Provide your analysis as a bulleted list."""
         )
         
         # Extract and return the summary text
-        return message.choices[0].message.content
+        summary_content = message.choices[0].message.content
+        logger.info(
+            "[DEBUG] generate_summary() — Groq API call SUCCEEDED. "
+            "Response length=%d, preview=%s",
+            len(summary_content),
+            summary_content[:100] if summary_content else "None",
+        )
+        return summary_content
         
     except Exception as e:
+        logger.error(
+            "[DEBUG] generate_summary() — Groq API call FAILED: %s",
+            str(e),
+            exc_info=True,
+        )
         return f"Unable to generate summary at this moment. Error: {str(e)}"
 
 
@@ -181,6 +224,20 @@ def format_correlations(correlation_matrix: dict) -> str:
 @app.get("/")
 def home():
     return {"status": "backend running"}
+
+@app.get("/debug/env")
+def debug_env():
+    """Diagnostic endpoint to check runtime environment (safe, no secrets leaked)."""
+    return {
+        "groq_key_set": bool(os.getenv("GROQ_API_KEY")),
+        "groq_key_name_used": "GROQ_API_KEY",
+        "groq_client_initialized": groq_client is not None,
+        "groq_client_init_error": groq_client_init_error,
+        "redis_available": cache.available,
+        "redis_url_set": bool(os.getenv("REDIS_URL")),
+        "cors_origins": allowed_origins,
+        "python_version": os.sys.version,
+    }
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
@@ -320,10 +377,23 @@ async def upload(file: UploadFile = File(...)):
         }
 
         # Generate AI summary
+        logger.info("[DEBUG /upload] About to call generate_summary()...")
         try:
             ai_summary = generate_summary(stats)
-        except Exception:
+            logger.info(
+                "[DEBUG /upload] generate_summary() returned. "
+                "ai_summary type=%s, length=%d, preview=%s",
+                type(ai_summary).__name__,
+                len(ai_summary) if ai_summary else 0,
+                ai_summary[:120] if ai_summary else "None/Empty",
+            )
+        except Exception as exc:
             ai_summary = "AI summary unavailable."
+            logger.error(
+                "[DEBUG /upload] generate_summary() raised an UNEXPECTED exception: %s",
+                exc,
+                exc_info=True,
+            )
 
         result = {
             "rows": df.shape[0],
@@ -337,6 +407,13 @@ async def upload(file: UploadFile = File(...)):
             "categorical_top_frequencies": categorical_top_frequencies,
             "ai_summary": ai_summary,
         }
+
+        logger.info(
+            "[DEBUG /upload] Final result keys=%s, ai_summary field type=%s, preview=%s",
+            list(result.keys()),
+            type(result["ai_summary"]).__name__,
+            str(result["ai_summary"])[:120] if result["ai_summary"] else "None/Empty",
+        )
 
         # ------------------------------------------------------------------
         # Store the analysis result in the cache for future requests
