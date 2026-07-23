@@ -15,6 +15,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Temporary debug log collector (for diagnosing Vercel runtime issues)
+# ---------------------------------------------------------------------------
+debug_logs: list[dict] = []
+
+def _debug(message: str, **extra) -> None:
+    """Append a structured debug entry and log it."""
+    entry = {"message": message, **extra}
+    debug_logs.append(entry)
+    logger.info("[DEBUG] %s | extras=%s", message, extra)
+
+# ---------------------------------------------------------------------------
 # Environment variable handling
 # On Vercel: env vars are injected by Vercel Dashboard, NOT from .env files.
 # On local dev: export GROQ_API_KEY=... or use a backend/.env file manually.
@@ -35,32 +46,44 @@ groq_client_init_error = None
 groq_api_key = os.getenv("GROQ_API_KEY")
 
 if not groq_api_key:
-    logger.warning(
-        "[DEBUG] GROQ_API_KEY env var is NOT SET (empty or missing). "
-        "Groq client will NOT be available. Make sure it is configured "
-        "in the Vercel Dashboard → Backend project → Environment Variables."
+    _debug(
+        "GROQ_API_KEY existence check",
+        groq_key_exists=False,
+        groq_client_initialized=False,
+        init_error="GROQ_API_KEY is not set",
     )
     groq_client_init_error = "GROQ_API_KEY is not set"
 else:
-    # Mask the key for safe logging — show first 4 + last 4 chars
-    masked = groq_api_key[:4] + "****" + groq_api_key[-4:] if len(groq_api_key) > 8 else "****"
-    logger.info(
-        "[DEBUG] GROQ_API_KEY is SET (masked: %s, length=%d). Attempting Groq client init...",
-        masked,
-        len(groq_api_key),
+    _debug(
+        "GROQ_API_KEY existence check",
+        groq_key_exists=True,
+        groq_client_initialized=False,
+        init_error=None,
     )
     try:
         groq_client = Groq(api_key=groq_api_key)
-        logger.info("[DEBUG] Groq client initialized SUCCESSFULLY.")
+        _debug(
+            "Groq client initialized successfully",
+            groq_key_exists=True,
+            groq_client_initialized=True,
+            init_error=None,
+        )
     except Exception as e:
         groq_client_init_error = str(e)
-        logger.warning(
-            "[DEBUG] Groq client initialization FAILED: %s",
-            e,
-            exc_info=True,  # includes full traceback in logs
+        _debug(
+            "Groq client initialization FAILED",
+            groq_key_exists=True,
+            groq_client_initialized=False,
+            init_error=str(e),
+            exception_type=type(e).__name__,
         )
 
-logger.info("[DEBUG] groq_client is None? %s", groq_client is None)
+_debug(
+    "After Groq init — final client state",
+    groq_key_exists=bool(groq_api_key),
+    groq_client_initialized=groq_client is not None,
+    init_error=groq_client_init_error,
+)
 
 # ---------------------------------------------------------------------------
 # CORS Configuration
@@ -95,14 +118,18 @@ def generate_summary(stats: dict) -> str:
     Returns:
         A string containing the generated summary or a friendly error message.
     """
-    logger.info("[DEBUG] generate_summary() CALLED. groq_client is None? %s", groq_client is None)
+    _debug(
+        "generate_summary() called",
+        groq_client_initialized=groq_client is not None,
+        groq_client_init_error=groq_client_init_error,
+    )
     
     # If Groq client failed to initialize, avoid calling it and return a clear message.
     if groq_client is None:
-        logger.warning(
-            "[DEBUG] generate_summary() — groq_client is None. "
-            "Returning fallback message. groq_client_init_error=%s",
-            groq_client_init_error,
+        _debug(
+            "generate_summary() skipped — groq_client is None",
+            groq_client_initialized=False,
+            groq_client_init_error=groq_client_init_error,
         )
         return "Unable to generate summary at this moment. Error: Groq client not configured."
 
@@ -144,28 +171,38 @@ Your summary should:
 Provide your analysis as a bulleted list."""
         
         # Call Groq API with low temperature for consistency
-        logger.info("[DEBUG] generate_summary() — About to call Groq API (model=llama-3.1-8b-instant)...")
+        model_name = "llama-3.1-8b-instant"
+        _debug(
+            "generate_summary() — about to call Groq API",
+            model=model_name,
+            api_call_started=True,
+            api_call_completed=False,
+        )
         message = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=model_name,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
         )
         
         # Extract and return the summary text
         summary_content = message.choices[0].message.content
-        logger.info(
-            "[DEBUG] generate_summary() — Groq API call SUCCEEDED. "
-            "Response length=%d, preview=%s",
-            len(summary_content),
-            summary_content[:100] if summary_content else "None",
+        _debug(
+            "generate_summary() — Groq API call succeeded",
+            model=model_name,
+            api_call_started=True,
+            api_call_completed=True,
+            response_length=len(summary_content) if summary_content else 0,
         )
         return summary_content
         
     except Exception as e:
-        logger.error(
-            "[DEBUG] generate_summary() — Groq API call FAILED: %s",
-            str(e),
-            exc_info=True,
+        _debug(
+            "generate_summary() — Groq API call FAILED",
+            model=model_name if 'model_name' in dir() else "unknown",
+            api_call_started=True,
+            api_call_completed=False,
+            exception_type=type(e).__name__,
+            exception_message=str(e),
         )
         return f"Unable to generate summary at this moment. Error: {str(e)}"
 
@@ -422,6 +459,15 @@ async def upload(file: UploadFile = File(...)):
             cache.set(csv_bytes, result)
         except Exception as exc:
             logger.warning("Failed to cache analysis result: %s", exc)
+
+        # ------------------------------------------------------------------
+        # Attach debug logs to response when not in production
+        # (VERCEL_ENV is "production" on Vercel prod; falls back to
+        #  NODE_ENV for non-Vercel environments)
+        # ------------------------------------------------------------------
+        is_production = os.getenv("VERCEL_ENV") == "production" or os.getenv("NODE_ENV") == "production"
+        if not is_production:
+            result["debug"] = list(debug_logs)
 
         return result
 
