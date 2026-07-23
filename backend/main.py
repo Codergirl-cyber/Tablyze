@@ -69,7 +69,7 @@ logger.info("[DEBUG] groq_client is None? %s", groq_client is None)
 # ---------------------------------------------------------------------------
 cors_origins_str = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:3000,https://tablyze.vercel.app,https://tablyze-cssx.vercel.app"
+    "http://localhost:3000,https://tablyze.vercel.app,https://tablyze-cssx.vercel.app,https://tablyze-3qkp.vercel.app"
 )
 allowed_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
 logger.info("CORS allowed origins: %s", allowed_origins)

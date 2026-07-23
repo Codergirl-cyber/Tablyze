@@ -313,14 +313,28 @@ export default function Home() {
       ? `Something went wrong while analyzing your dataset: ${derived.error}`
       : null);
   const hasUploadResult = Boolean(result) && !uploadError;
-  const summaryToShow =
-    (result && typeof (result as Record<string, unknown>).ai_summary === "string" &&
-      ((result as Record<string, unknown>).ai_summary as string).trim())
-      ? ((result as Record<string, unknown>).ai_summary as string)
-      : (result && typeof (result as Record<string, unknown>).summary === "string" &&
-        ((result as Record<string, unknown>).summary as string).trim())
-        ? ((result as Record<string, unknown>).summary as string)
-        : undefined;
+  // Extract AI summary from response, with fallbacks for error states
+  const summaryToShow = (() => {
+    if (!result) return undefined;
+
+    const aiSummary = (result as Record<string, unknown>).ai_summary;
+    if (typeof aiSummary === "string" && aiSummary.trim()) {
+      return aiSummary;
+    }
+
+    const summary = (result as Record<string, unknown>).summary;
+    if (typeof summary === "string" && summary.trim()) {
+      return summary;
+    }
+
+    // If the response has an error but still partial data, show a helpful message
+    const respError = (result as Record<string, unknown>).error;
+    if (typeof respError === "string") {
+      return `AI summary could not be generated: ${respError}`;
+    }
+
+    return undefined;
+  })();
 
   return (
     <main className="min-h-screen bg-gray-50 text-black p-4 sm:p-6">
