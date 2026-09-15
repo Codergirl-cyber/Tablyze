@@ -315,7 +315,13 @@ async def upload(file: UploadFile = File(...)):
             logger.warning("Cache lookup failed — proceeding with analysis: %s", exc)
 
         # Parse CSV from bytes
-        df = pd.read_csv(io.BytesIO(csv_bytes))
+        try:
+            df = pd.read_csv(io.BytesIO(csv_bytes))
+        except (pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
+            return JSONResponse(
+                content={"error": f"Invalid CSV file: {exc}"},
+                status_code=400,
+            )
 
         total_rows = len(df)
         duplicate_rows = int(df.duplicated().sum())
