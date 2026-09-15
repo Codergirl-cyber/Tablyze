@@ -300,8 +300,19 @@ async def upload(file: UploadFile = File(...)):
                 status_code=400,
             )
 
-        # Read the raw CSV bytes for caching purposes
-        csv_bytes = await file.read()
+        # Read the upload in bounded chunks so oversized files are rejected early.
+        chunks = []
+        total_bytes = 0
+        while chunk := await file.read(1024 * 1024):
+            total_bytes += len(chunk)
+            if total_bytes > MAX_UPLOAD_BYTES:
+                return JSONResponse(
+                    content={"error": "CSV files must be 10 MB or smaller."},
+                    status_code=413,
+                )
+            chunks.append(chunk)
+
+        csv_bytes = b"".join(chunks)
         if len(csv_bytes) > MAX_UPLOAD_BYTES:
             return JSONResponse(
                 content={"error": "CSV files must be 10 MB or smaller."},
@@ -323,7 +334,7 @@ async def upload(file: UploadFile = File(...)):
         # Parse CSV from bytes
         try:
             df = pd.read_csv(io.BytesIO(csv_bytes))
-        except (pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
+        except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError) as exc:
             return JSONResponse(
                 content={"error": f"Invalid CSV file: {exc}"},
                 status_code=400,
