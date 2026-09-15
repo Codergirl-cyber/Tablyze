@@ -294,6 +294,12 @@ async def upload(file: UploadFile = File(...)):
         return val
 
     try:
+        if not file.filename or not file.filename.lower().endswith(".csv"):
+            return JSONResponse(
+                content={"error": "Please upload a CSV file."},
+                status_code=400,
+            )
+
         # Read the raw CSV bytes for caching purposes
         csv_bytes = await file.read()
         if len(csv_bytes) > MAX_UPLOAD_BYTES:
