@@ -265,6 +265,9 @@ def home():
 @app.get("/debug/env")
 def debug_env():
     """Diagnostic endpoint to check runtime environment (safe, no secrets leaked)."""
+    if os.getenv("VERCEL_ENV") == "production" or os.getenv("NODE_ENV") == "production":
+        return JSONResponse(content={"error": "Not found"}, status_code=404)
+
     return {
         "groq_key_set": bool(os.getenv("GROQ_API_KEY")),
         "groq_key_name_used": "GROQ_API_KEY",
