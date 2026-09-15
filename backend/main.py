@@ -205,7 +205,7 @@ Provide your analysis as a bulleted list."""
             exception_type=type(e).__name__,
             exception_message=str(e),
         )
-        return f"Unable to generate summary at this moment. Error: {str(e)}"
+        return "Unable to generate summary at this moment."
 
 
 def format_missing_values(missing_values: dict) -> str:

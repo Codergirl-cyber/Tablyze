@@ -22,6 +22,7 @@ import { StaggerContainer } from "./components/AnimatedContainer";
 import ExportReportButton from "./components/ExportReportButton";
 
 export default function Home() {
+  const MAX_FILE_SIZE = 10 * 1024 * 1024;
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -52,6 +53,13 @@ export default function Home() {
 
     if (!isCsvFile(selected)) {
       setUploadError("Please choose a valid CSV file.");
+      setFile(null);
+      setSelectedFileName(null);
+      return;
+    }
+
+    if (selected.size > MAX_FILE_SIZE) {
+      setUploadError("CSV files must be 10 MB or smaller.");
       setFile(null);
       setSelectedFileName(null);
       return;
