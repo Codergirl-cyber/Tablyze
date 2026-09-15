@@ -98,6 +98,7 @@ allowed_origins = [origin.strip() for origin in cors_origins_str.split(",") if o
 logger.info("CORS allowed origins: %s", allowed_origins)
 
 app = FastAPI()
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 app.add_middleware(
     CORSMiddleware,
@@ -295,6 +296,11 @@ async def upload(file: UploadFile = File(...)):
     try:
         # Read the raw CSV bytes for caching purposes
         csv_bytes = await file.read()
+        if len(csv_bytes) > MAX_UPLOAD_BYTES:
+            return JSONResponse(
+                content={"error": "CSV files must be 10 MB or smaller."},
+                status_code=413,
+            )
 
         # ------------------------------------------------------------------
         # Try fetching cached analysis results for this exact CSV content
