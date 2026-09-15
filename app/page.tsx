@@ -207,10 +207,9 @@ export default function Home() {
     const rows = typeof result.rows === "number" ? result.rows : undefined;
     const columns = typeof result.columns === "number" ? result.columns : undefined;
 
-    // Duplicate rows derived client-side (no backend changes).
-    // Uses row-wise JSON stringification of values.
-    // If the backend doesn't provide full row data, this falls back to 0.
-    const duplicateRows = (() => {
+    const duplicateRows = typeof result.duplicate_rows === "number"
+      ? result.duplicate_rows
+      : (() => {
       const maybeRowsData = (result as Record<string, unknown>).rows_data;
       const rowObjects = Array.isArray(maybeRowsData) ? (maybeRowsData as unknown[]) : null;
 
@@ -236,7 +235,7 @@ export default function Home() {
         if (c > 1) duplicates += c - 1;
       }
       return duplicates;
-    })();
+      })();
     const columnNames: string[] = Array.isArray(result.column_names)
       ? result.column_names
       : [];

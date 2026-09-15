@@ -309,6 +309,7 @@ async def upload(file: UploadFile = File(...)):
         df = pd.read_csv(io.BytesIO(csv_bytes))
 
         total_rows = len(df)
+        duplicate_rows = int(df.duplicated().sum())
         missing_series = df.isna().sum(axis=0)
 
         missing_values = {}
@@ -406,6 +407,7 @@ async def upload(file: UploadFile = File(...)):
         stats = {
             "rows": df.shape[0],
             "columns": df.shape[1],
+            "duplicate_rows": duplicate_rows,
             "column_names": list(df.columns),
             "dtypes": df.dtypes.astype(str).to_dict(),
             "missing_values": missing_values,
