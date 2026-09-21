@@ -18,9 +18,13 @@ class RedisCache:
     def __init__(self):
         self.available = False
         self._client = None
-        self.ttl = int(os.getenv("CACHE_TTL", "3600"))  # default 1 hour
+        try:
+            self.ttl = int(os.getenv("CACHE_TTL", "3600"))
+        except ValueError:
+            logger.warning("RedisCache: invalid CACHE_TTL — caching disabled.")
+            return
 
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        redis_url = os.getenv("REDIS_URL")
         if not redis_url:
             logger.info(
                 "RedisCache: REDIS_URL is not set — caching disabled."
@@ -40,16 +44,14 @@ class RedisCache:
             self._client.ping()
             self.available = True
             logger.info(
-                "RedisCache: connected to Redis at %s (TTL=%ss)",
-                redis_url,
+                "RedisCache: connected to configured Redis (TTL=%ss)",
                 self.ttl,
             )
         except Exception as exc:
             logger.warning(
-                "RedisCache: failed to connect to Redis at %s — "
-                "caching disabled. Error: %s",
-                redis_url,
-                exc,
+                "RedisCache: failed to connect to configured Redis — "
+                "caching disabled. Error type: %s",
+                type(exc).__name__,
             )
             self._client = None
             self.available = False

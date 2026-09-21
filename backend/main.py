@@ -1,9 +1,7 @@
 import io
 import logging
-import time
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
-import traceback
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import os
@@ -61,7 +59,7 @@ else:
         init_error=None,
     )
     try:
-        groq_client = Groq(api_key=groq_api_key)
+        groq_client = Groq(api_key=groq_api_key, timeout=30.0, max_retries=0)
         _debug(
             "Groq client initialized successfully",
             groq_key_exists=True,
@@ -69,12 +67,12 @@ else:
             init_error=None,
         )
     except Exception as e:
-        groq_client_init_error = str(e)
+        groq_client_init_error = type(e).__name__
         _debug(
             "Groq client initialization FAILED",
             groq_key_exists=True,
             groq_client_initialized=False,
-            init_error=str(e),
+            init_error=type(e).__name__,
             exception_type=type(e).__name__,
         )
 
@@ -203,7 +201,7 @@ Provide your analysis as a bulleted list."""
             api_call_started=True,
             api_call_completed=False,
             exception_type=type(e).__name__,
-            exception_message=str(e),
+            exception_message=type(e).__name__,
         )
         return "Unable to generate summary at this moment."
 
@@ -338,6 +336,12 @@ async def upload(file: UploadFile = File(...)):
             return JSONResponse(
                 content={"error": f"Invalid CSV file: {exc}"},
                 status_code=400,
+            )
+        except Exception:
+            logger.exception("CSV parsing failed unexpectedly")
+            return JSONResponse(
+                content={"error": "The CSV file could not be processed."},
+                status_code=422,
             )
 
         total_rows = len(df)
@@ -508,7 +512,9 @@ async def upload(file: UploadFile = File(...)):
 
 
 
-    except Exception as e:
-            # Log full traceback for easier debugging in server logs
-            traceback.print_exc()
-            return JSONResponse(content={"error": str(e)}, status_code=500)
+    except Exception:
+        logger.exception("Unexpected error while processing upload")
+        return JSONResponse(
+            content={"error": "The upload could not be processed."},
+            status_code=500,
+        )
