@@ -97,6 +97,7 @@ logger.info("CORS allowed origins: %s", allowed_origins)
 
 app = FastAPI()
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+UPLOAD_CACHE_ENABLED = False
 
 app.add_middleware(
     CORSMiddleware,
@@ -320,14 +321,15 @@ async def upload(file: UploadFile = File(...)):
         # ------------------------------------------------------------------
         # Try fetching cached analysis results for this exact CSV content
         # ------------------------------------------------------------------
-        try:
-            cached = cache.get(csv_bytes)
-            if cached is not None:
-                logger.info("Cache HIT — returning cached analysis")
-                return cached
-            logger.info("Cache MISS — performing fresh analysis")
-        except Exception as exc:
-            logger.warning("Cache lookup failed — proceeding with analysis: %s", exc)
+        if UPLOAD_CACHE_ENABLED:
+            try:
+                cached = cache.get(csv_bytes)
+                if cached is not None:
+                    logger.info("Cache HIT — returning cached analysis")
+                    return cached
+                logger.info("Cache MISS — performing fresh analysis")
+            except Exception as exc:
+                logger.warning("Cache lookup failed — proceeding with analysis: %s", exc)
 
         # Parse CSV from bytes
         try:
@@ -493,10 +495,11 @@ async def upload(file: UploadFile = File(...)):
         # ------------------------------------------------------------------
         # Store the analysis result in the cache for future requests
         # ------------------------------------------------------------------
-        try:
-            cache.set(csv_bytes, result)
-        except Exception as exc:
-            logger.warning("Failed to cache analysis result: %s", exc)
+        if UPLOAD_CACHE_ENABLED:
+            try:
+                cache.set(csv_bytes, result)
+            except Exception as exc:
+                logger.warning("Failed to cache analysis result: %s", exc)
 
         # ------------------------------------------------------------------
         # Attach debug logs to response when not in production
