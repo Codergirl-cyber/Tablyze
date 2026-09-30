@@ -5,7 +5,6 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import os
-from groq import Groq
 from cache import RedisCache
 
 # Configure structured logging
@@ -13,75 +12,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Temporary debug log collector (for diagnosing Vercel runtime issues)
-# ---------------------------------------------------------------------------
-debug_logs: list[dict] = []
-
-def _debug(message: str, **extra) -> None:
-    """Append a structured debug entry and log it."""
-    entry = {"message": message, **extra}
-    debug_logs.append(entry)
-    logger.info("[DEBUG] %s | extras=%s", message, extra)
-
-# ---------------------------------------------------------------------------
-# Environment variable handling
-# On Vercel: env vars are injected by Vercel Dashboard, NOT from .env files.
-# On local dev: export GROQ_API_KEY=... or use a backend/.env file manually.
-# We do NOT call load_dotenv() here because in Vercel serverless it can
-# accidentally load stale/shadow .env files and override Dashboard vars.
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # Initialise the Redis cache (fails gracefully if Redis is unavailable)
 # ---------------------------------------------------------------------------
 cache = RedisCache()
-
-# ---------------------------------------------------------------------------
-# Groq client initialisation with debug logging
-# ---------------------------------------------------------------------------
-groq_client = None
-groq_client_init_error = None
-groq_api_key = os.getenv("GROQ_API_KEY")
-
-if not groq_api_key:
-    _debug(
-        "GROQ_API_KEY existence check",
-        groq_key_exists=False,
-        groq_client_initialized=False,
-        init_error="GROQ_API_KEY is not set",
-    )
-    groq_client_init_error = "GROQ_API_KEY is not set"
-else:
-    _debug(
-        "GROQ_API_KEY existence check",
-        groq_key_exists=True,
-        groq_client_initialized=False,
-        init_error=None,
-    )
-    try:
-        groq_client = Groq(api_key=groq_api_key, timeout=30.0, max_retries=0)
-        _debug(
-            "Groq client initialized successfully",
-            groq_key_exists=True,
-            groq_client_initialized=True,
-            init_error=None,
-        )
-    except Exception as e:
-        groq_client_init_error = type(e).__name__
-        _debug(
-            "Groq client initialization FAILED",
-            groq_key_exists=True,
-            groq_client_initialized=False,
-            init_error=type(e).__name__,
-            exception_type=type(e).__name__,
-        )
-
-_debug(
-    "After Groq init — final client state",
-    groq_key_exists=bool(groq_api_key),
-    groq_client_initialized=groq_client is not None,
-    init_error=groq_client_init_error,
-)
 
 # ---------------------------------------------------------------------------
 # CORS Configuration
@@ -107,157 +40,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def generate_summary(stats: dict) -> str:
-    """
-    Generate a professional data summary using the Groq Chat Completions API.
-    
-    Args:
-        stats: Dictionary containing dataset statistics (rows, columns, missing_values, 
-               numeric_summary, correlation_matrix, etc.)
-    
-    Returns:
-        A string containing the generated summary or a friendly error message.
-    """
-    _debug(
-        "generate_summary() called",
-        groq_client_initialized=groq_client is not None,
-        groq_client_init_error=groq_client_init_error,
-    )
-    
-    # If Groq client failed to initialize, avoid calling it and return a clear message.
-    if groq_client is None:
-        _debug(
-            "generate_summary() skipped — groq_client is None",
-            groq_client_initialized=False,
-            groq_client_init_error=groq_client_init_error,
-        )
-        return "Unable to generate summary at this moment. Error: Groq client not configured."
-
-    try:
-        # Format statistics for the LLM
-        summary_text = f"""
-Dataset Overview:
-- Total Rows: {stats.get('rows', 'N/A')}
-- Total Columns: {stats.get('columns', 'N/A')}
-- Column Names: {', '.join(stats.get('column_names', []))}
-
-Missing Values:
-{format_missing_values(stats.get('missing_values', {}))}
-
-Numeric Summary:
-{format_numeric_summary(stats.get('numeric_summary', {}))}
-
-Correlation Matrix (strong correlations only):
-{format_correlations(stats.get('correlation_matrix', {}))}
-
-Data Types:
-{', '.join([f'{col}: {dtype}' for col, dtype in stats.get('dtypes', {}).items()])}
-"""
-        
-        prompt = f"""You are a professional data analyst.
-
-Analyze these dataset statistics:
-
-{summary_text}
-
-Your summary should:
-- Mention dataset size.
-- Highlight missing values.
-- Mention strong correlations if present.
-- Suggest possible preprocessing steps.
-- Avoid speculation or unsupported conclusions.
-- Keep the response concise (5–8 bullet points).
-
-Provide your analysis as a bulleted list."""
-        
-        # Call Groq API with low temperature for consistency
-        model_name = "llama-3.1-8b-instant"
-        _debug(
-            "generate_summary() — about to call Groq API",
-            model=model_name,
-            api_call_started=True,
-            api_call_completed=False,
-        )
-        message = groq_client.chat.completions.create(
-            model=model_name,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-        )
-        
-        # Extract and return the summary text
-        summary_content = message.choices[0].message.content
-        _debug(
-            "generate_summary() — Groq API call succeeded",
-            model=model_name,
-            api_call_started=True,
-            api_call_completed=True,
-            response_length=len(summary_content) if summary_content else 0,
-        )
-        return summary_content
-        
-    except Exception as e:
-        _debug(
-            "generate_summary() — Groq API call FAILED",
-            model=model_name if 'model_name' in dir() else "unknown",
-            api_call_started=True,
-            api_call_completed=False,
-            exception_type=type(e).__name__,
-            exception_message=type(e).__name__,
-        )
-        return "Unable to generate summary at this moment."
-
-
-def format_missing_values(missing_values: dict) -> str:
-    """Format missing values data for the summary."""
-    if not missing_values:
-        return "- No missing values detected."
-    
-    items = [f"  - {col}: {count} missing" for col, count in missing_values.items() if count > 0]
-    if not items:
-        return "- No missing values detected."
-    return "\n".join(items)
-
-
-def format_numeric_summary(numeric_summary: dict) -> str:
-    """Format numeric summary statistics for the summary."""
-    if not numeric_summary:
-        return "- No numeric columns found."
-    
-    lines = []
-    for col, stats in numeric_summary.items():
-        lines.append(f"  - {col}: mean={stats.get('mean', 'N/A')}, std={stats.get('std', 'N/A')}, "
-                     f"min={stats.get('min', 'N/A')}, max={stats.get('max', 'N/A')}")
-    return "\n".join(lines) if lines else "- No numeric columns found."
-
-
-def format_correlations(correlation_matrix: dict) -> str:
-    """Format strong correlations (>0.7 or <-0.7) for the summary."""
-    if not correlation_matrix:
-        return "- No correlations calculated."
-    
-    strong_correlations = []
-    seen_pairs = set()
-    
-    for col1, correlations in correlation_matrix.items():
-        for col2, corr_value in correlations.items():
-            if corr_value is None or col1 == col2:
-                continue
-            
-            # Avoid duplicate pairs
-            pair = tuple(sorted([col1, col2]))
-            if pair in seen_pairs:
-                continue
-            
-            # Only show strong correlations
-            if abs(corr_value) > 0.7:
-                strong_correlations.append(f"  - {col1} ↔ {col2}: {corr_value:.2f}")
-                seen_pairs.add(pair)
-    
-    if not strong_correlations:
-        return "- No strong correlations detected."
-    return "\n".join(strong_correlations)
-
-
 @app.get("/")
 def home():
     return {"status": "backend running"}
@@ -269,10 +51,6 @@ def debug_env():
         return JSONResponse(content={"error": "Not found"}, status_code=404)
 
     return {
-        "groq_key_set": bool(os.getenv("GROQ_API_KEY")),
-        "groq_key_name_used": "GROQ_API_KEY",
-        "groq_client_initialized": groq_client is not None,
-        "groq_client_init_error": groq_client_init_error,
         "redis_available": cache.available,
         "redis_url_set": bool(os.getenv("REDIS_URL")),
         "cors_origins": allowed_origins,
@@ -441,37 +219,6 @@ async def upload(file: UploadFile = File(...)):
                 for idx, cnt in vc.items()
             ]
 
-        # Create stats dictionary for AI summary generation
-        stats = {
-            "rows": df.shape[0],
-            "columns": df.shape[1],
-            "duplicate_rows": duplicate_rows,
-            "column_names": list(df.columns),
-            "dtypes": df.dtypes.astype(str).to_dict(),
-            "missing_values": missing_values,
-            "numeric_summary": numeric_summary,
-            "correlation_matrix": correlation_matrix,
-        }
-
-        # Generate AI summary
-        logger.info("[DEBUG /upload] About to call generate_summary()...")
-        try:
-            ai_summary = generate_summary(stats)
-            logger.info(
-                "[DEBUG /upload] generate_summary() returned. "
-                "ai_summary type=%s, length=%d, preview=%s",
-                type(ai_summary).__name__,
-                len(ai_summary) if ai_summary else 0,
-                ai_summary[:120] if ai_summary else "None/Empty",
-            )
-        except Exception as exc:
-            ai_summary = "AI summary unavailable."
-            logger.error(
-                "[DEBUG /upload] generate_summary() raised an UNEXPECTED exception: %s",
-                exc,
-                exc_info=True,
-            )
-
         result = {
             "rows": df.shape[0],
             "columns": df.shape[1],
@@ -482,15 +229,7 @@ async def upload(file: UploadFile = File(...)):
             "iqr_outliers": iqr_outliers,
             "correlation_matrix": correlation_matrix,
             "categorical_top_frequencies": categorical_top_frequencies,
-            "ai_summary": ai_summary,
         }
-
-        logger.info(
-            "[DEBUG /upload] Final result keys=%s, ai_summary field type=%s, preview=%s",
-            list(result.keys()),
-            type(result["ai_summary"]).__name__,
-            str(result["ai_summary"])[:120] if result["ai_summary"] else "None/Empty",
-        )
 
         # ------------------------------------------------------------------
         # Store the analysis result in the cache for future requests
@@ -500,15 +239,6 @@ async def upload(file: UploadFile = File(...)):
                 cache.set(csv_bytes, result)
             except Exception as exc:
                 logger.warning("Failed to cache analysis result: %s", exc)
-
-        # ------------------------------------------------------------------
-        # Attach debug logs to response when not in production
-        # (VERCEL_ENV is "production" on Vercel prod; falls back to
-        #  NODE_ENV for non-Vercel environments)
-        # ------------------------------------------------------------------
-        is_production = os.getenv("VERCEL_ENV") == "production" or os.getenv("NODE_ENV") == "production"
-        if not is_production:
-            result["debug"] = list(debug_logs)
 
         return result
 

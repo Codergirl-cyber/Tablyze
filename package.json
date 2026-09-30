@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@babel/runtime": "^8.0.0",
-    "@supabase/supabase-js": "^2.110.1",
     "framer-motion": "^12.42.2",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",

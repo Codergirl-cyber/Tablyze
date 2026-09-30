@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -22,8 +22,6 @@ interface ExportReportButtonProps {
 // ---------------------------------------------------------------------------
 // PDF generation constants
 // ---------------------------------------------------------------------------
-const PDF_PAGE_FORMAT = "a4";
-const PDF_UNIT = "mm";
 const PAGE_WIDTH = 210; // mm (A4)
 const PAGE_HEIGHT = 297; // mm (A4)
 const MARGIN_TOP = 20;
@@ -140,11 +138,6 @@ export default function ExportReportButton({
       const summaryStatsSection = dashboard.querySelector<HTMLElement>(
         '[data-export-section="summary-stats"]'
       );
-      // AI summary section
-      const aiSummarySection = dashboard.querySelector<HTMLElement>(
-        '[data-export-section="ai-summary"]'
-      );
-
       // ---------------------------------------------------------------
       // 2. Capture all sections in parallel
       // ---------------------------------------------------------------
@@ -154,7 +147,6 @@ export default function ExportReportButton({
         captureElement(dataTypesSection!, "DataTypes"),
         captureElement(correlationSection!, "Correlation"),
         captureElement(summaryStatsSection!, "SummaryStats"),
-        captureElement(aiSummarySection!, "AiSummary"),
       ]);
 
       const [
@@ -163,7 +155,6 @@ export default function ExportReportButton({
         dataTypesImg,
         correlationImg,
         summaryStatsImg,
-        aiSummaryImg,
       ] = captures;
 
       // ---------------------------------------------------------------
@@ -337,7 +328,6 @@ export default function ExportReportButton({
       addImageToPage(dataTypesImg, "Data Types");
       addImageToPage(correlationImg, "Correlation Heatmap");
       addImageToPage(summaryStatsImg, "Summary Statistics");
-      addImageToPage(aiSummaryImg, "AI Dataset Summary");
 
       // ---- Save the PDF ----
       const safeFileName = fileName

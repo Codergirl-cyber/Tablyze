@@ -8,7 +8,6 @@ import StatCard from "./components/StatCard";
 import MissingValuesBarChart from "./components/MissingValuesBarChart";
 import DataTypesPieChart from "./components/DataTypesPieChart";
 import CorrelationHeatmap from "./components/CorrelationHeatmap";
-import AiSummaryCard from "./components/AiSummaryCard";
 import StatCardSkeleton from "./components/StatCardSkeleton";
 import ChartSkeleton from "./components/ChartSkeleton";
 import TableSkeleton from "./components/TableSkeleton";
@@ -125,17 +124,15 @@ export default function Home() {
       { stage: "uploading", ms: 0 },
       { stage: "parsing", ms: 1500 },
       { stage: "computing", ms: 4000 },
-      { stage: "generating", ms: 7000 },
+      { stage: "finalizing", ms: 7000 },
     ];
 
-    setCurrentStage("uploading");
-    setUploadStatus("processing");
     const startTime = Date.now();
 
     stageTimerRef.current = setInterval(() => {
       const elapsed = Date.now() - startTime;
       // Find the last milestone that we've passed
-      let newStage: UploadStage = "generating";
+      let newStage: UploadStage = "finalizing";
       for (const m of STAGE_MILESTONES) {
         if (elapsed >= m.ms) {
           newStage = m.stage;
@@ -162,6 +159,7 @@ export default function Home() {
 
     processingRef.current = true;
     setUploadError(null);
+    setCurrentStage("uploading");
     setUploadStatus("processing");
     try {
       setIsUploading(true);
@@ -188,7 +186,7 @@ export default function Home() {
         setResult(data);
         uploadSucceeded = true;
       }
-    } catch (err) {
+    } catch {
       setUploadError(
         "Unable to upload the file right now. Please check your network and try again."
       );
@@ -319,30 +317,6 @@ export default function Home() {
     (derived?.error
       ? `Something went wrong while analyzing your dataset: ${derived.error}`
       : null);
-  const hasUploadResult = Boolean(result) && !uploadError;
-  // Extract AI summary from response, with fallbacks for error states
-  const summaryToShow = (() => {
-    if (!result) return undefined;
-
-    const aiSummary = (result as Record<string, unknown>).ai_summary;
-    if (typeof aiSummary === "string" && aiSummary.trim()) {
-      return aiSummary;
-    }
-
-    const summary = (result as Record<string, unknown>).summary;
-    if (typeof summary === "string" && summary.trim()) {
-      return summary;
-    }
-
-    // If the response has an error but still partial data, show a helpful message
-    const respError = (result as Record<string, unknown>).error;
-    if (typeof respError === "string") {
-      return `AI summary could not be generated: ${respError}`;
-    }
-
-    return undefined;
-  })();
-
   return (
     <main className="min-h-screen bg-gray-50 text-black p-4 sm:p-6">
       <div className="w-full max-w-5xl mx-auto">
@@ -586,24 +560,6 @@ export default function Home() {
                   </SectionCard>
                 </div>
 
-                {/* AI Summary skeleton — same position as AiSummaryCard */}
-                <div className="mt-4">
-                  <SectionCard
-                    title={
-                      <div className="flex items-center gap-2">
-                        <div className="animate-pulse rounded-full bg-gray-200 h-9 w-9" />
-                        <div className="animate-pulse rounded-md bg-gray-200 h-4 w-36" />
-                      </div>
-                    }
-                    subtitle="AI-generated insights from your dataset"
-                  >
-                    <div className="rounded-xl border border-gray-200 p-4">
-                      <div className="animate-pulse rounded-md bg-gray-200 h-3 w-full mb-2" />
-                      <div className="animate-pulse rounded-md bg-gray-200 h-3 w-5/6 mb-2" />
-                      <div className="animate-pulse rounded-md bg-gray-200 h-3 w-4/6" />
-                    </div>
-                  </SectionCard>
-                </div>
               </div>
             ) : null}
 
@@ -698,11 +654,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {hasUploadResult ? (
-                    <div className="mt-6" data-export-section="ai-summary">
-                      <AiSummaryCard summary={summaryToShow ?? undefined} error={uploadError} />
-                    </div>
-                  ) : null}
                 </div>
               </StaggerContainer>
             ) : null}

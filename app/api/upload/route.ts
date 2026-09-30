@@ -25,7 +25,6 @@ export async function POST(request: NextRequest) {
     const backendFormData = new FormData();
     backendFormData.append("file", uploadedFile, uploadedFile.name);
 
-    // Increase timeout for backend processing (AI summary can be slow)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
@@ -48,7 +47,7 @@ export async function POST(request: NextRequest) {
     try {
       const data = JSON.parse(responseText);
       return NextResponse.json(data, { status: upstreamResponse.status });
-    } catch (parseErr) {
+    } catch {
       console.error("[Upload Proxy] Upstream response is not valid JSON:", responseText);
       return NextResponse.json(
         { error: typeof responseText === "string" ? responseText : String(responseText) },

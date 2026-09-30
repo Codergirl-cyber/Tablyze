@@ -6,7 +6,6 @@ export type UploadStage =
   | "uploading"
   | "parsing"
   | "computing"
-  | "generating"
   | "finalizing";
 
 export type UploadStatus = "idle" | "processing" | "error" | "done";
@@ -20,7 +19,6 @@ const STAGES: StageConfig[] = [
   { key: "uploading", label: "Uploading CSV..." },
   { key: "parsing", label: "Parsing dataset..." },
   { key: "computing", label: "Computing statistics..." },
-  { key: "generating", label: "Generating AI summary..." },
   { key: "finalizing", label: "Finalizing dashboard..." },
 ];
 
@@ -126,8 +124,6 @@ export default function UploadProgress({ currentStage, status }: UploadProgressP
             const isActive = idx === stageIndex && !hasError;
             const isCompleted = idx < stageIndex;
             const isErrored = idx === stageIndex && hasError;
-            const isUpcoming = idx > stageIndex;
-
             return (
               <div key={stage.key}>
                 <div className="flex items-center gap-3 py-2">
