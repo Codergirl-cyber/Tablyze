@@ -19,6 +19,7 @@ import FileCard from "./components/FileCard";
 import OnboardingSection from "./components/OnboardingSection";
 import { StaggerContainer } from "./components/AnimatedContainer";
 import ExportReportButton from "./components/ExportReportButton";
+import DataAgentSection from "./components/DataAgentSection";
 
 export default function Home() {
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -35,6 +36,7 @@ export default function Home() {
   const stageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dashboardRef = useRef<HTMLDivElement | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [uploadSession, setUploadSession] = useState(0);
 
   const formatFileLabel = (file: File) => `${file.name} • ${(file.size / 1024).toFixed(1)} KB`;
   const isCsvFile = (candidate: File | null) => {
@@ -184,6 +186,7 @@ export default function Home() {
         uploadFailed = true;
       } else {
         setResult(data);
+        setUploadSession((session) => session + 1);
         uploadSucceeded = true;
       }
     } catch {
@@ -657,6 +660,11 @@ export default function Home() {
                 </div>
               </StaggerContainer>
             ) : null}
+
+            <DataAgentSection
+              key={`${uploadSession}-${hasAnalysis}`}
+              hasDataset={hasAnalysis}
+            />
           </DashboardShell>
         </div>
       </div>

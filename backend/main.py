@@ -5,7 +5,11 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import os
+from pydantic import BaseModel, Field
 from cache import RedisCache
+from analysis import analyze_dataframe
+from agent.agent import AgentError, investigate
+from agent.state import dataset_store
 
 # Configure structured logging
 logging.basicConfig(level=logging.INFO)
@@ -40,9 +44,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+class InvestigateRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=4000)
+
+
 @app.get("/")
 def home():
     return {"status": "backend running"}
+
 
 @app.get("/debug/env")
 def debug_env():
@@ -55,21 +65,13 @@ def debug_env():
         "redis_url_set": bool(os.getenv("REDIS_URL")),
         "cors_origins": allowed_origins,
         "python_version": os.sys.version,
+        "dataset_loaded": dataset_store.has_dataset(),
+        "llm_provider": os.getenv("LLM_PROVIDER", "ollama"),
     }
+
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
-    def to_jsonable(val):
-        # Minimal helper to keep JSON-serializable output for pandas/numpy scalars
-        if pd.isna(val):
-            return None
-        if hasattr(val, "item"):
-            try:
-                return val.item()
-            except Exception:
-                pass
-        return val
-
     try:
         if not file.filename or not file.filename.lower().endswith(".csv"):
             return JSONResponse(
@@ -104,6 +106,10 @@ async def upload(file: UploadFile = File(...)):
                 cached = cache.get(csv_bytes)
                 if cached is not None:
                     logger.info("Cache HIT — returning cached analysis")
+                    dataset_store.set_dataset(
+                        pd.read_csv(io.BytesIO(csv_bytes)),
+                        file.filename,
+                    )
                     return cached
                 logger.info("Cache MISS — performing fresh analysis")
             except Exception as exc:
@@ -124,112 +130,8 @@ async def upload(file: UploadFile = File(...)):
                 status_code=422,
             )
 
-        total_rows = len(df)
-        duplicate_rows = int(df.duplicated().sum())
-        missing_series = df.isna().sum(axis=0)
-
-        missing_values = {}
-        for col in df.columns:
-            missing_count = int(missing_series[col])
-            missing_values[str(col)] = missing_count
-
-        numeric_df = df.select_dtypes(include=["number"])
-
-        # Correlation matrix (numeric columns only). If <2 numeric columns, return empty.
-        correlation_matrix = {}
-        if numeric_df.shape[1] >= 2:
-            corr = numeric_df.corr(numeric_only=True)
-            correlation_matrix = {
-                str(col): {str(c2): to_jsonable(val) for c2, val in corr.loc[col].items()}
-                for col in corr.columns
-            }
-
-
-        
-
-        numeric_summary = {}
-        iqr_outliers = {}
-
-        for col in numeric_df.columns:
-            s = numeric_df[col]
-
-            count = int(s.count())
-
-            q1 = (
-                to_jsonable(s.quantile(0.25, interpolation="linear"))
-                if count > 0
-                else None
-            )
-            q3 = (
-                to_jsonable(s.quantile(0.75, interpolation="linear"))
-                if count > 0
-                else None
-            )
-
-            # IQR outlier bounds using Tukey's rule (1.5 * IQR)
-            if q1 is None or q3 is None:
-                iqr = None
-                lower_bound = None
-                upper_bound = None
-                outlier_count = 0
-            else:
-                iqr_val = q3 - q1
-                lower_bound_val = q1 - 1.5 * iqr_val
-                upper_bound_val = q3 + 1.5 * iqr_val
-
-                # Count outliers excluding NaNs
-                outlier_count = int(
-                    ((s < lower_bound_val) | (s > upper_bound_val)).sum()
-                )
-
-                iqr = to_jsonable(iqr_val)
-                lower_bound = to_jsonable(lower_bound_val)
-                upper_bound = to_jsonable(upper_bound_val)
-
-            stats = {
-                "count": count,
-                "mean": to_jsonable(s.mean()),
-                "std": to_jsonable(s.std()),
-                "min": to_jsonable(s.min()),
-                "25%": q1,
-                "50%": to_jsonable(s.quantile(0.50, interpolation="linear")) if count > 0 else None,
-                "75%": q3,
-                "max": to_jsonable(s.max()),
-            }
-            numeric_summary[str(col)] = stats
-
-            iqr_outliers[str(col)] = {
-                "q1": q1,
-                "q3": q3,
-                "iqr": iqr,
-                "lower_bound": lower_bound,
-                "upper_bound": upper_bound,
-                "outlier_count": outlier_count,
-            }
-
-
-        # Top 5 most frequent values for each categorical (non-numeric) column
-        categorical_df = df.select_dtypes(exclude=["number"])
-        categorical_top_frequencies = {}
-        for col in categorical_df.columns:
-            s = categorical_df[col]
-            vc = s.value_counts(dropna=True).head(5)
-            categorical_top_frequencies[str(col)] = [
-                {"value": to_jsonable(idx), "count": int(cnt)}
-                for idx, cnt in vc.items()
-            ]
-
-        result = {
-            "rows": df.shape[0],
-            "columns": df.shape[1],
-            "column_names": list(df.columns),
-            "dtypes": df.dtypes.astype(str).to_dict(),
-            "missing_values": missing_values,
-            "numeric_summary": numeric_summary,
-            "iqr_outliers": iqr_outliers,
-            "correlation_matrix": correlation_matrix,
-            "categorical_top_frequencies": categorical_top_frequencies,
-        }
+        result = analyze_dataframe(df)
+        dataset_store.set_dataset(df, file.filename)
 
         # ------------------------------------------------------------------
         # Store the analysis result in the cache for future requests
@@ -242,12 +144,45 @@ async def upload(file: UploadFile = File(...)):
 
         return result
 
-
-
-
     except Exception:
         logger.exception("Unexpected error while processing upload")
         return JSONResponse(
             content={"error": "The upload could not be processed."},
+            status_code=500,
+        )
+
+
+@app.post("/api/agent/investigate")
+def agent_investigate(body: InvestigateRequest):
+    stored = dataset_store.get_dataset()
+    if stored is None:
+        return JSONResponse(
+            content={
+                "error": "No dataset uploaded. Upload a CSV via POST /upload first.",
+                "code": "no_dataset",
+            },
+            status_code=400,
+        )
+
+    try:
+        payload = investigate(body.question, stored.dataframe)
+        return {
+            "question": payload["question"],
+            "answer": payload["answer"],
+            "evidence": payload["evidence"],
+            "tools_used": payload["tools_used"],
+        }
+    except AgentError as exc:
+        status = 503 if exc.code == "llm_unavailable" else 400
+        if exc.code == "empty_dataset":
+            status = 400
+        return JSONResponse(
+            content={"error": str(exc), "code": exc.code},
+            status_code=status,
+        )
+    except Exception:
+        logger.exception("Agent investigation failed")
+        return JSONResponse(
+            content={"error": "Investigation could not be completed.", "code": "agent_failure"},
             status_code=500,
         )
