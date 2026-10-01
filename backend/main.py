@@ -171,6 +171,7 @@ def agent_investigate(body: InvestigateRequest):
             "answer": payload["answer"],
             "evidence": payload["evidence"],
             "tools_used": payload["tools_used"],
+            "investigation": payload["investigation"],
         }
     except AgentError as exc:
         status = 503 if exc.code == "llm_unavailable" else 400

@@ -223,6 +223,20 @@ export default function DataAgentSection({
                 <p className="mt-2 text-sm text-gray-500">No tools were reported.</p>
               )}
             </div>
+
+            {investigation.investigation?.length ? (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Investigation</h3>
+                <ol className="mt-2 space-y-2 text-sm text-gray-700">
+                  {investigation.investigation.map((step) => (
+                    <li key={step.step}>
+                      <span className="font-mono text-xs text-gray-900">{step.tool}</span>
+                      {step.reason ? <span className="text-gray-500">: {step.reason}</span> : null}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </SectionCard>

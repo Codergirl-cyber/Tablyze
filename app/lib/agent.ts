@@ -4,11 +4,19 @@ export type AgentEvidence = {
   value: unknown;
 };
 
+export type InvestigationStep = {
+  step: number;
+  tool: string;
+  reason: string;
+  summary: string;
+};
+
 export type InvestigateResponse = {
   question: string;
   answer: string;
   evidence: AgentEvidence[];
   tools_used: string[];
+  investigation?: InvestigationStep[];
 };
 
 export type AgentErrorCode =
@@ -91,12 +99,28 @@ function parseSuccessPayload(data: unknown): InvestigateResponse {
   const tools_used = Array.isArray(toolsRaw)
     ? toolsRaw.filter((t): t is string => typeof t === "string" && t.length > 0)
     : [];
+  const traceRaw = record.investigation;
+  const investigation = Array.isArray(traceRaw)
+    ? traceRaw
+        .filter(
+          (item): item is Record<string, unknown> =>
+            Boolean(item) && typeof item === "object"
+        )
+        .map((item) => ({
+          step: Number(item.step),
+          tool: String(item.tool ?? ""),
+          reason: String(item.reason ?? ""),
+          summary: String(item.summary ?? ""),
+        }))
+        .filter((item) => Number.isInteger(item.step) && item.tool.length > 0)
+    : undefined;
 
   return {
     question,
     answer,
     evidence,
     tools_used,
+    investigation,
   };
 }
 
