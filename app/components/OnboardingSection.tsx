@@ -120,14 +120,7 @@ export default function OnboardingSection({
           <button
             type="button"
             onClick={onLoadSample}
-            className="
-              inline-flex items-center gap-2 px-5 py-2.5
-              rounded-xl text-sm font-semibold
-              bg-gray-900 text-white shadow-sm
-              hover:bg-gray-800 active:bg-gray-900 active:scale-[0.98]
-              transition-all duration-200 ease-in-out
-              focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2
-            "
+            className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-800 active:scale-[0.98] active:bg-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
           >
             {/* CSV icon */}
             <svg

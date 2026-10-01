@@ -1,5 +1,12 @@
+import os
 import io
 import logging
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env", override=False)
+
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +21,16 @@ from agent.state import dataset_store
 # Configure structured logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+_groq_key = os.getenv("GROQ_API_KEY", "")
+logger.info(
+    "LLM configuration: provider=%s model=%s groq_api_key_present=%s groq_api_key_length=%d",
+    os.getenv("LLM_PROVIDER", "<unset>"),
+    os.getenv("LLM_MODEL", "llama3.2"),
+    bool(_groq_key),
+    len(_groq_key),
+)
+del _groq_key
 
 # ---------------------------------------------------------------------------
 # Initialise the Redis cache (fails gracefully if Redis is unavailable)
@@ -66,7 +83,7 @@ def debug_env():
         "cors_origins": allowed_origins,
         "python_version": os.sys.version,
         "dataset_loaded": dataset_store.has_dataset(),
-        "llm_provider": os.getenv("LLM_PROVIDER", "ollama"),
+        "llm_provider": os.getenv("LLM_PROVIDER", "<unset>"),
     }
 
 

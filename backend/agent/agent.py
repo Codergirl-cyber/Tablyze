@@ -9,7 +9,8 @@ import re
 from typing import Any
 
 from analysis import analyze_dataframe
-from agent.llm import LLMError, LLMProvider, get_llm_provider
+from agent import llm_client
+from agent.llm import LLMError, LLMProvider
 from agent.tools import REGISTERED_TOOLS, TOOL_DESCRIPTIONS, run_tool
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ def _result_contains(value: Any, result: Any) -> bool:
 def decide_next_action(
     question: str,
     steps: list[dict[str, Any]],
-    llm: LLMProvider,
+    llm: LLMProvider | None = None,
 ) -> dict[str, str]:
     tool_lines = "\n".join(
         f"- {name}: {desc}" for name, desc in TOOL_DESCRIPTIONS.items()
@@ -74,14 +75,28 @@ def decide_next_action(
         f"Previous investigation steps and actual results (JSON):\n"
         f"{json.dumps(steps, default=str)}\n"
     )
-    raw = llm.chat(
-        [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        json_mode=True,
-    )
-    payload = _parse_json_object(raw)
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+
+    def complete(current_messages: list[dict[str, str]]) -> str:
+        if llm is not None:
+            return llm.chat(current_messages, json_mode=True)
+        return llm_client.complete(current_messages, json_mode=True)
+
+    raw = complete(messages)
+    try:
+        payload = _parse_json_object(raw)
+    except AgentError as exc:
+        if exc.code != "llm_malformed_response":
+            raise
+        retry_messages = [*messages]
+        retry_messages[1] = {
+            "role": "user",
+            "content": f"{user}\n\nReturn valid JSON only. Do not include markdown or commentary.",
+        }
+        payload = _parse_json_object(complete(retry_messages))
     action = payload.get("action")
     reason = payload.get("reason")
     if action not in {"run_tool", "finish"} or not isinstance(reason, str) or not reason.strip():
@@ -112,13 +127,11 @@ def synthesize_answer(
         f"Question: {question}\n\n"
         f"Tool results (JSON):\n{json.dumps(tool_outputs, default=str)}\n"
     )
-    raw = llm.chat(
-        [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        json_mode=True,
-    )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+    raw = llm.chat(messages, json_mode=True) if llm is not None else llm_client.complete(messages, json_mode=True)
     payload = _parse_json_object(raw)
     answer = payload.get("answer")
     evidence = payload.get("evidence")
@@ -167,13 +180,11 @@ def investigate(question: str, dataframe, llm: LLMProvider | None = None) -> dic
     if dataframe is None or len(dataframe.index) == 0:
         raise AgentError("Dataset is empty.", code="empty_dataset")
 
-    provider = llm or get_llm_provider()
-
     steps: list[dict[str, Any]] = []
     try:
         analysis = analyze_dataframe(dataframe)
         for _ in range(MAX_AGENT_STEPS):
-            decision = decide_next_action(q, steps, provider)
+            decision = decide_next_action(q, steps, llm)
             if decision["action"] == "finish":
                 break
             tool_name = decision["tool"]
@@ -188,7 +199,7 @@ def investigate(question: str, dataframe, llm: LLMProvider | None = None) -> dic
             steps.append({"tool": tool_name, "reason": decision["reason"], "result": result})
 
         reached_limit = len(steps) == MAX_AGENT_STEPS
-        synthesis = synthesize_answer(q, [step["result"] for step in steps], provider)
+        synthesis = synthesize_answer(q, [step["result"] for step in steps], llm)
     except LLMError as exc:
         raise AgentError(str(exc), code="llm_unavailable") from exc
 

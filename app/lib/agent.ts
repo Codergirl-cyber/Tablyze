@@ -42,7 +42,7 @@ const ERROR_MESSAGES: Record<string, string> = {
     "No dataset is loaded on the server. Upload your CSV again, then investigate.",
   invalid_question: "Enter a question before investigating.",
   llm_unavailable:
-    "The analysis assistant is unavailable. Start Ollama locally (or configure your LLM provider) and try again.",
+    "The analysis assistant is unavailable. Check the configured LLM provider and API key, then try again.",
   agent_failure: "The investigation could not be completed. Please try again.",
   tool_failure:
     "A dataset analysis step failed during investigation. Try a narrower question or re-upload your CSV.",

@@ -43,6 +43,20 @@ class AgentInvestigationTests(unittest.TestCase):
         self.assertEqual(result["tools_used"], ["get_missing_values"])
         self.assertEqual(len(result["investigation"]), 1)
 
+    def test_malformed_decision_retries_once(self):
+        llm = ScriptedLLM(
+            [
+                "not json",
+                {"action": "finish", "reason": "The answer is already supported."},
+                {"answer": "No tool was needed.", "evidence": []},
+            ]
+        )
+
+        result = agent.investigate("Is there anything to inspect?", self.dataframe, llm)
+
+        self.assertEqual(result["tools_used"], [])
+        self.assertIn("Return valid JSON only", llm.messages[1][1]["content"])
+
     def test_next_decision_receives_prior_actual_result(self):
         llm = ScriptedLLM(
             [
