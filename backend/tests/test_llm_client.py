@@ -32,7 +32,7 @@ class LLMClientTests(unittest.TestCase):
     def test_ollama_request_shape(self):
         response = {"message": {"content": '{"ok": true}'} }
         with patch.dict(os.environ, {"LLM_PROVIDER": "ollama", "LLM_MODEL": "local-model", "LLM_BASE_URL": "http://localhost:11434", "LLM_TIMEOUT_SECONDS": "12"}, clear=True):
-            with patch("agent.llm_client.urllib.request.urlopen", return_value=FakeResponse(response)) as request:
+            with patch("agent.llm_client.urlopen", return_value=FakeResponse(response)) as request:
                 result = llm_client.complete(self.messages, json_mode=True)
 
         payload = json.loads(request.call_args.args[0].data.decode("utf-8"))
@@ -45,7 +45,7 @@ class LLMClientTests(unittest.TestCase):
     def test_groq_request_shape(self):
         response = {"choices": [{"message": {"content": '{"ok": true}'}}]}
         with patch.dict(os.environ, {"LLM_PROVIDER": "groq", "GROQ_API_KEY": "secret", "LLM_MODEL": "groq-model"}, clear=True):
-            with patch("agent.llm_client.urllib.request.urlopen", return_value=FakeResponse(response)) as request:
+            with patch("agent.llm_client.urlopen", return_value=FakeResponse(response)) as request:
                 result = llm_client.complete(self.messages, json_mode=True)
 
         payload = json.loads(request.call_args.args[0].data.decode("utf-8"))
@@ -53,6 +53,30 @@ class LLMClientTests(unittest.TestCase):
         self.assertEqual(request.call_args.args[0].full_url, "https://api.groq.com/openai/v1/chat/completions")
         self.assertEqual(payload["response_format"], {"type": "json_object"})
         self.assertEqual(request.call_args.args[0].get_header("Authorization"), "Bearer secret")
+        self.assertEqual(request.call_args.args[0].get_header("User-agent"), "Tablyze/1.0")
+
+    def test_groq_gpt_oss_request_omits_unsupported_temperature(self):
+        response = {"choices": [{"message": {"content": '{"ok": true}'}}]}
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "groq",
+                "GROQ_API_KEY": "secret",
+                "LLM_MODEL": "openai/gpt-oss-20b",
+            },
+            clear=True,
+        ):
+            with patch(
+                "agent.llm_client.urlopen",
+                return_value=FakeResponse(response),
+            ) as request:
+                result = llm_client.complete(self.messages, json_mode=True)
+
+        payload = json.loads(request.call_args.args[0].data.decode("utf-8"))
+        self.assertEqual(result, '{"ok": true}')
+        self.assertEqual(payload["model"], "openai/gpt-oss-20b")
+        self.assertNotIn("temperature", payload)
+        self.assertEqual(payload["response_format"], {"type": "json_object"})
 
     def test_gemini_request_shape(self):
         response = {"candidates": [{"content": {"parts": [{"text": '{"ok": true}'}]}}]}
@@ -61,7 +85,7 @@ class LLMClientTests(unittest.TestCase):
             {"role": "user", "content": "Return JSON."},
         ]
         with patch.dict(os.environ, {"LLM_PROVIDER": "gemini", "GEMINI_API_KEY": "secret", "LLM_MODEL": "gemini-model"}, clear=True):
-            with patch("agent.llm_client.urllib.request.urlopen", return_value=FakeResponse(response)) as request:
+            with patch("agent.llm_client.urlopen", return_value=FakeResponse(response)) as request:
                 result = llm_client.complete(messages, json_mode=True)
 
         payload = json.loads(request.call_args.args[0].data.decode("utf-8"))
@@ -82,7 +106,7 @@ class LLMClientTests(unittest.TestCase):
         response = {"message": {"content": "ok"}}
         with patch.dict(os.environ, {"LLM_PROVIDER": "ollama"}, clear=True):
             with patch(
-                "agent.llm_client.urllib.request.urlopen",
+                "agent.llm_client.urlopen",
                 side_effect=[FakeResponse({}, 503), FakeResponse(response)],
             ) as request:
                 self.assertEqual(llm_client.complete(self.messages), "ok")
@@ -92,7 +116,7 @@ class LLMClientTests(unittest.TestCase):
         response = {"message": {"content": "ok"}}
         with patch.dict(os.environ, {"LLM_PROVIDER": "ollama"}, clear=True):
             with patch(
-                "agent.llm_client.urllib.request.urlopen",
+                "agent.llm_client.urlopen",
                 side_effect=[TimeoutError(), FakeResponse(response)],
             ) as request:
                 self.assertEqual(llm_client.complete(self.messages), "ok")
@@ -101,7 +125,7 @@ class LLMClientTests(unittest.TestCase):
     def test_does_not_retry_client_failure_and_does_not_expose_key(self):
         error = urllib.error.HTTPError("http://provider", 401, "bad", {}, None)
         with patch.dict(os.environ, {"LLM_PROVIDER": "groq", "GROQ_API_KEY": "secret-key"}, clear=True):
-            with patch("agent.llm_client.urllib.request.urlopen", side_effect=error) as request:
+            with patch("agent.llm_client.urlopen", side_effect=error) as request:
                 with self.assertRaises(llm_client.LLMError) as raised:
                     llm_client.complete(self.messages)
         self.assertEqual(request.call_count, 1)
