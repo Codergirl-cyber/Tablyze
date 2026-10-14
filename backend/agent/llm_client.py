@@ -23,10 +23,12 @@ class LLMError(Exception):
         self,
         message: str,
         status_code: int | None = None,
+        response_body: str | None = None,
     ):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+        self.response_body = response_body
 
 
 def _timeout_seconds() -> int:
@@ -69,6 +71,7 @@ def _request_json(
         raise LLMError(
             f"LLM API returned HTTP {exc.code}: {error_body[:500]}",
             status_code=exc.code,
+            response_body=error_body,
         ) from exc
 
     except URLError as exc:

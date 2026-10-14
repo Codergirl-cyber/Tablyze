@@ -116,6 +116,52 @@ def _tool_descriptions() -> str:
     )
 
 
+def _recover_tool_call_action(error: LLMError) -> dict[str, Any] | None:
+    """Recover a planner action when Groq rejects GPT-OSS tool-call formatting."""
+
+    if error.status_code != 400 or not error.response_body:
+        return None
+
+    try:
+        provider_error = json.loads(error.response_body)
+        if not isinstance(provider_error, dict):
+            return None
+
+        error_details = provider_error["error"]
+        if not isinstance(error_details, dict):
+            return None
+
+        if error_details.get("code") != "tool_use_failed":
+            return None
+
+        failed_generation = json.loads(error_details["failed_generation"])
+    except (KeyError, TypeError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(failed_generation, dict):
+        return None
+
+    if failed_generation.get("name") != "repo.run_tool":
+        return None
+
+    arguments = failed_generation.get("arguments")
+    tool_name = arguments.get("tool") if isinstance(arguments, dict) else None
+    if (
+        not isinstance(arguments, dict)
+        or arguments.get("action") != "run_tool"
+        or not isinstance(tool_name, str)
+        or tool_name not in REGISTERED_TOOLS
+    ):
+        return None
+
+    reason = arguments.get("reason", "")
+    return {
+        "action": "run_tool",
+        "tool": tool_name,
+        "reason": reason if isinstance(reason, str) else "",
+    }
+
+
 def decide_next_action(
     question: str,
     dataframe_summary: dict[str, Any],
@@ -128,16 +174,16 @@ def decide_next_action(
             "role": "system",
             "content": (
                 "You are a data-analysis planning assistant.\n"
-                "You must return one valid JSON object only.\n"
-                "Do not call functions or tools yourself.\n"
-                "Choose tools only from the supplied available_tools.\n"
-                'To execute a tool, return: '
-                '{"action":"run_tool","tool":"TOOL_NAME",'
+                "Return one plain JSON object as text. Never invoke or "
+                "request a function, API, or external tool call.\n"
+                "Select an analysis only from available_analyses.\n"
+                'To select an analysis, return: '
+                '{"action":"analyze","analysis":"ANALYSIS_NAME",'
                 '"reason":"short explanation"}\n'
                 'When no further analysis is necessary, return: '
-                '{"action":"finish","reason":"short explanation"}\n'
-                "Do not invent tool names.\n"
-                "Avoid repeating a tool that has already produced "
+                '{"action":"complete","reason":"short explanation"}\n'
+                "Do not invent analysis names.\n"
+                "Avoid repeating an analysis that has already produced "
                 "a successful result unless additional analysis is needed."
             ),
         },
@@ -148,7 +194,7 @@ def decide_next_action(
                     "question": question,
                     "dataframe_summary": dataframe_summary,
                     "previous_steps": previous_steps,
-                    "available_tools": _tool_descriptions(),
+                    "available_analyses": _tool_descriptions(),
                 },
                 ensure_ascii=False,
                 default=str,
@@ -157,14 +203,31 @@ def decide_next_action(
     ]
 
     for attempt in range(2):
-        response = _complete(messages)
+        try:
+            response = _complete(messages)
+        except LLMError as exc:
+            recovered_action = _recover_tool_call_action(exc)
+            if recovered_action is None:
+                raise
+            logger.warning(
+                "Recovered planner analysis selection from Groq tool-call output."
+            )
+            return recovered_action
 
         try:
             action = _parse_json_object(response)
             action_type = action.get("action")
 
-            if action_type == "finish":
-                return action
+            if action_type in {"finish", "complete"}:
+                return {**action, "action": "finish"}
+
+            if action_type == "analyze":
+                action = {
+                    **action,
+                    "action": "run_tool",
+                    "tool": action.get("analysis"),
+                }
+                action_type = "run_tool"
 
             if action_type != "run_tool":
                 raise AgentError(
@@ -200,9 +263,10 @@ def decide_next_action(
                         "role": "user",
                         "content": (
                             "Your previous response could not be used: "
-                            f"{exc}. Return valid JSON only, using exactly "
-                            "the required action format and a tool from "
-                            "available_tools."
+                            f"{exc}. Return one plain JSON object as text "
+                            "using exactly the required action format and "
+                            "an analysis from available_analyses. Do not "
+                            "invoke or request an external function call."
                         ),
                     },
                 ]

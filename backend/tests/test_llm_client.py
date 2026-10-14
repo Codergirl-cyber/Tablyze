@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import sys
@@ -129,7 +130,36 @@ class LLMClientTests(unittest.TestCase):
                 with self.assertRaises(llm_client.LLMError) as raised:
                     llm_client.complete(self.messages)
         self.assertEqual(request.call_count, 1)
+        self.assertEqual(raised.exception.status_code, 401)
         self.assertNotIn("secret-key", str(raised.exception))
+
+    def test_preserves_groq_tool_use_error_body_for_agent_recovery(self):
+        error_body = json.dumps(
+            {
+                "error": {
+                    "code": "tool_use_failed",
+                    "failed_generation": '{"name":"repo.run_tool","arguments":{}}',
+                }
+            }
+        )
+        error = urllib.error.HTTPError(
+            "https://api.groq.com/openai/v1/chat/completions",
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(error_body.encode("utf-8")),
+        )
+        with patch.dict(
+            os.environ,
+            {"LLM_PROVIDER": "groq", "GROQ_API_KEY": "secret-key"},
+            clear=True,
+        ):
+            with patch("agent.llm_client.urlopen", side_effect=error):
+                with self.assertRaises(llm_client.LLMError) as raised:
+                    llm_client.complete(self.messages, json_mode=True)
+
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertEqual(raised.exception.response_body, error_body)
 
 
 if __name__ == "__main__":
