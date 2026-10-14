@@ -191,9 +191,18 @@ def agent_investigate(body: InvestigateRequest):
             "investigation": payload["investigation"],
         }
     except AgentError as exc:
-        status = 503 if exc.code == "llm_unavailable" else 400
-        if exc.code == "empty_dataset":
+        logger.warning("Agent investigation rejected: code=%s", exc.code)
+        if exc.code in {
+            "invalid_question",
+            "missing_dataframe",
+            "invalid_dataframe",
+            "empty_dataset",
+        }:
             status = 400
+        elif exc.code.startswith("llm_"):
+            status = 502
+        else:
+            status = 500
         return JSONResponse(
             content={"error": str(exc), "code": exc.code},
             status_code=status,

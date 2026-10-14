@@ -1,0 +1,1262 @@
+[1mdiff --git a/backend/agent/agent.py b/backend/agent/agent.py[m
+[1mindex f11bf76..332a499 100644[m
+[1m--- a/backend/agent/agent.py[m
+[1m+++ b/backend/agent/agent.py[m
+[36m@@ -1,4 +1,4 @@[m
+[31m-"""Minimal Data Agent: plan tools, execute, synthesize evidence-backed answers."""[m
+[32m+[m[32m"""Data Agent for investigating questions about uploaded datasets."""[m
+ [m
+ from __future__ import annotations[m
+ [m
+[36m@@ -8,10 +8,13 @@[m [mimport os[m
+ import re[m
+ from typing import Any[m
+ [m
+[32m+[m[32mimport pandas as pd[m
+[32m+[m
+ from analysis import analyze_dataframe[m
+[31m-from agent import llm_client[m
+[31m-from agent.llm import LLMError, LLMProvider[m
+[31m-from agent.tools import REGISTERED_TOOLS, TOOL_DESCRIPTIONS, run_tool[m
+[32m+[m[32mfrom . import llm_client[m
+[32m+[m[32mfrom .llm_client import LLMError[m
+[32m+[m[32mfrom .tools import REGISTERED_TOOLS, TOOL_DESCRIPTIONS, run_tool[m
+[32m+[m
+ [m
+ logger = logging.getLogger(__name__)[m
+ [m
+[36m@@ -19,13 +22,30 @@[m [mMAX_AGENT_STEPS = max(1, int(os.getenv("MAX_AGENT_STEPS", "5")))[m
+ [m
+ [m
+ class AgentError(Exception):[m
+[31m-    def __init__(self, message: str, *, code: str = "agent_error"):[m
+[32m+[m[32m    """Error raised during agent investigation."""[m
+[32m+[m
+[32m+[m[32m    def __init__([m
+[32m+[m[32m        self,[m
+[32m+[m[32m        message: str,[m
+[32m+[m[32m        code: str = "agent_error",[m
+[32m+[m[32m    ) -> None:[m
+         super().__init__(message)[m
+[32m+[m[32m        self.message = message[m
+         self.code = code[m
+ [m
+ [m
+ def _parse_json_object(text: str) -> dict[str, Any]:[m
+[32m+[m[32m    """Parse a JSON object, even if extra text surrounds it."""[m
+[32m+[m
+[32m+[m[32m    if not isinstance(text, str) or not text.strip():[m
+[32m+[m[32m        raise AgentError([m
+[32m+[m[32m            "The language model returned an empty response.",[m
+[32m+[m[32m            code="llm_empty_response",[m
+[32m+[m[32m        )[m
+[32m+[m
+     text = text.strip()[m
+[32m+[m
+[32m+[m[32m    # First, try parsing the entire response.[m
+     try:[m
+         parsed = json.loads(text)[m
+         if isinstance(parsed, dict):[m
+[36m@@ -33,193 +53,383 @@[m [mdef _parse_json_object(text: str) -> dict[str, Any]:[m
+     except json.JSONDecodeError:[m
+         pass[m
+ [m
+[31m-    match = re.search(r"\{[\s\S]*\}", text)[m
+[31m-    if match:[m
+[32m+[m[32m    # Remove Markdown code fences.[m
+[32m+[m[32m    cleaned = re.sub([m
+[32m+[m[32m        r"^\s*```(?:json)?\s*|\s*```\s*$",[m
+[32m+[m[32m        "",[m
+[32m+[m[32m        text,[m
+[32m+[m[32m        flags=re.IGNORECASE,[m
+[32m+[m[32m    ).strip()[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        parsed = json.loads(cleaned)[m
+[32m+[m[32m        if isinstance(parsed, dict):[m
+[32m+[m[32m            return parsed[m
+[32m+[m[32m    except json.JSONDecodeError:[m
+[32m+[m[32m        pass[m
+[32m+[m
+[32m+[m[32m    # Try to locate a JSON object inside surrounding text.[m
+[32m+[m[32m    decoder = json.JSONDecoder()[m
+[32m+[m
+[32m+[m[32m    for match in re.finditer(r"\{", cleaned):[m
+         try:[m
+[31m-            parsed = json.loads(match.group(0))[m
+[32m+[m[32m            parsed, _ = decoder.raw_decode(cleaned[match.start():])[m
+[32m+[m
+             if isinstance(parsed, dict):[m
+                 return parsed[m
+[32m+[m
+         except json.JSONDecodeError:[m
+[31m-            pass[m
+[31m-    raise AgentError("LLM returned malformed JSON.", code="llm_malformed_response")[m
+[32m+[m[32m            continue[m
+[32m+[m
+[32m+[m[32m    raise AgentError([m
+[32m+[m[32m        "The language model returned malformed JSON.",[m
+[32m+[m[32m        code="llm_malformed_response",[m
+[32m+[m[32m    )[m
+ [m
+ [m
+[31m-def _result_contains(value: Any, result: Any) -> bool:[m
+[31m-    if value == result:[m
+[31m-        return True[m
+[31m-    if isinstance(result, dict):[m
+[31m-        return any(_result_contains(value, item) for item in result.values())[m
+[31m-    if isinstance(result, list):[m
+[31m-        return any(_result_contains(value, item) for item in result)[m
+[31m-    return False[m
+[32m+[m[32mdef _complete(messages: list[dict[str, str]]) -> str:[m
+[32m+[m[32m    """Request a response from the configured LLM."""[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        return llm_client.complete(messages, json_mode=True)[m
+[32m+[m
+[32m+[m[32m    except LLMError:[m
+[32m+[m[32m        logger.exception("LLM request failed.")[m
+[32m+[m[32m        raise[m
+[32m+[m
+[32m+[m[32m    except Exception as exc:[m
+[32m+[m[32m        logger.exception("Unexpected LLM error.")[m
+[32m+[m
+[32m+[m[32m        raise AgentError([m
+[32m+[m[32m            "The language model request failed.",[m
+[32m+[m[32m            code="llm_request_failed",[m
+[32m+[m[32m        ) from exc[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef _tool_descriptions() -> str:[m
+[32m+[m[32m    """Return the registered tool descriptions as JSON."""[m
+[32m+[m
+[32m+[m[32m    return json.dumps([m
+[32m+[m[32m        TOOL_DESCRIPTIONS,[m
+[32m+[m[32m        ensure_ascii=False,[m
+[32m+[m[32m        default=str,[m
+[32m+[m[32m    )[m
+ [m
+ [m
+ def decide_next_action([m
+     question: str,[m
+[31m-    steps: list[dict[str, Any]],[m
+[31m-    llm: LLMProvider | None = None,[m
+[31m-) -> dict[str, str]:[m
+[31m-    tool_lines = "\n".join([m
+[31m-        f"- {name}: {desc}" for name, desc in TOOL_DESCRIPTIONS.items()[m
+[31m-    )[m
+[31m-    system = ([m
+[31m-        "You are an iterative data investigator. Choose exactly one next action using the "[m
+[31m-        "actual prior tool results, or finish if the evidence is sufficient. Use only the "[m
+[31m-        "available tools. Respond with JSON only, in one of these forms: "[m
+[31m-        '{"action":"run_tool","tool":"tool_name","reason":"..."} or '[m
+[31m-        '{"action":"finish","reason":"..."}.'[m
+[31m-    )[m
+[31m-    user = ([m
+[31m-        f"Original question:\n{question}\n\n"[m
+[31m-        f"Available tools:\n{tool_lines}\n\n"[m
+[31m-        f"Previous investigation steps and actual results (JSON):\n"[m
+[31m-        f"{json.dumps(steps, default=str)}\n"[m
+[31m-    )[m
+[32m+[m[32m    dataframe_summary: dict[str, Any],[m
+[32m+[m[32m    previous_steps: list[dict[str, Any]],[m
+[32m+[m[32m) -> dict[str, Any]:[m
+[32m+[m[32m    """Ask the LLM to select the next registered analysis tool."""[m
+[32m+[m
+     messages = [[m
+[31m-        {"role": "system", "content": system},[m
+[31m-        {"role": "user", "content": user},[m
+[32m+[m[32m        {[m
+[32m+[m[32m            "role": "system",[m
+[32m+[m[32m            "content": ([m
+[32m+[m[32m                "You are a data-analysis planning assistant.\n"[m
+[32m+[m[32m                "You must return one valid JSON object only.\n"[m
+[32m+[m[32m                "Do not call functions or tools yourself.\n"[m
+[32m+[m[32m                "Choose tools only from the supplied available_tools.\n"[m
+[32m+[m[32m                'To execute a tool, return: '[m
+[32m+[m[32m                '{"action":"run_tool","tool":"TOOL_NAME",'[m
+[32m+[m[32m                '"reason":"short explanation"}\n'[m
+[32m+[m[32m                'When no further analysis is necessary, return: '[m
+[32m+[m[32m                '{"action":"finish","reason":"short explanation"}\n'[m
+[32m+[m[32m                "Do not invent tool names.\n"[m
+[32m+[m[32m                "Avoid repeating a tool that has already produced "[m
+[32m+[m[32m                "a successful result unless additional analysis is needed."[m
+[32m+[m[32m            ),[m
+[32m+[m[32m        },[m
+[32m+[m[32m        {[m
+[32m+[m[32m            "role": "user",[m
+[32m+[m[32m            "content": json.dumps([m
+[32m+[m[32m                {[m
+[32m+[m[32m                    "question": question,[m
+[32m+[m[32m                    "dataframe_summary": dataframe_summary,[m
+[32m+[m[32m                    "previous_steps": previous_steps,[m
+[32m+[m[32m                    "available_tools": _tool_descriptions(),[m
+[32m+[m[32m                },[m
+[32m+[m[32m                ensure_ascii=False,[m
+[32m+[m[32m                default=str,[m
+[32m+[m[32m            ),[m
+[32m+[m[32m        },[m
+     ][m
+ [m
+[31m-    def complete(current_messages: list[dict[str, str]]) -> str:[m
+[31m-        if llm is not None:[m
+[31m-            return llm.chat(current_messages, json_mode=True)[m
+[31m-        return llm_client.complete(current_messages, json_mode=True)[m
+[32m+[m[32m    for attempt in range(2):[m
+[32m+[m[32m        response = _complete(messages)[m
+ [m
+[31m-    raw = complete(messages)[m
+[31m-    try:[m
+[31m-        payload = _parse_json_object(raw)[m
+[31m-    except AgentError as exc:[m
+[31m-        if exc.code != "llm_malformed_response":[m
+[31m-            raise[m
+[31m-        retry_messages = [*messages][m
+[31m-        retry_messages[1] = {[m
+[31m-            "role": "user",[m
+[31m-            "content": f"{user}\n\nReturn valid JSON only. Do not include markdown or commentary.",[m
+[31m-        }[m
+[31m-        payload = _parse_json_object(complete(retry_messages))[m
+[31m-    action = payload.get("action")[m
+[31m-    reason = payload.get("reason")[m
+[31m-    if action not in {"run_tool", "finish"} or not isinstance(reason, str) or not reason.strip():[m
+[31m-        raise AgentError("LLM returned an invalid investigation decision.", code="llm_malformed_response")[m
+[31m-    if action == "finish":[m
+[31m-        return {"action": action, "reason": reason.strip()}[m
+[32m+[m[32m        try:[m
+[32m+[m[32m            action = _parse_json_object(response)[m
+[32m+[m[32m            action_type = action.get("action")[m
+[32m+[m
+[32m+[m[32m            if action_type == "finish":[m
+[32m+[m[32m                return action[m
+[32m+[m
+[32m+[m[32m            if action_type != "run_tool":[m
+[32m+[m[32m                raise AgentError([m
+[32m+[m[32m                    "The language model returned an invalid action.",[m
+[32m+[m[32m                    code="llm_invalid_action",[m
+[32m+[m[32m                )[m
+ [m
+[31m-    tool_name = payload.get("tool")[m
+[31m-    if not isinstance(tool_name, str) or tool_name not in REGISTERED_TOOLS:[m
+[31m-        raise AgentError("LLM requested an unavailable analysis tool.", code="invalid_tool_selection")[m
+[31m-    return {"action": action, "tool": tool_name, "reason": reason.strip()}[m
+[32m+[m[32m            tool_name = action.get("tool")[m
+[32m+[m[32m            if ([m
+[32m+[m[32m                not isinstance(tool_name, str)[m
+[32m+[m[32m                or tool_name not in REGISTERED_TOOLS[m
+[32m+[m[32m            ):[m
+[32m+[m[32m                raise AgentError([m
+[32m+[m[32m                    "The language model selected an unknown tool.",[m
+[32m+[m[32m                    code="llm_invalid_tool",[m
+[32m+[m[32m                )[m
+[32m+[m
+[32m+[m[32m            return action[m
+[32m+[m[32m        except AgentError as exc:[m
+[32m+[m[32m            retryable_codes = {[m
+[32m+[m[32m                "llm_empty_response",[m
+[32m+[m[32m                "llm_malformed_response",[m
+[32m+[m[32m                "llm_invalid_action",[m
+[32m+[m[32m                "llm_invalid_tool",[m
+[32m+[m[32m            }[m
+[32m+[m[32m            if attempt == 1 or exc.code not in retryable_codes:[m
+[32m+[m[32m                raise[m
+[32m+[m
+[32m+[m[32m            messages.extend([m
+[32m+[m[32m                [[m
+[32m+[m[32m                    {"role": "assistant", "content": response},[m
+[32m+[m[32m                    {[m
+[32m+[m[32m                        "role": "user",[m
+[32m+[m[32m                        "content": ([m
+[32m+[m[32m                            "Your previous response could not be used: "[m
+[32m+[m[32m                            f"{exc}. Return valid JSON only, using exactly "[m
+[32m+[m[32m                            "the required action format and a tool from "[m
+[32m+[m[32m                            "available_tools."[m
+[32m+[m[32m                        ),[m
+[32m+[m[32m                    },[m
+[32m+[m[32m                ][m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m    raise AgentError([m
+[32m+[m[32m        "The language model returned an invalid action.",[m
+[32m+[m[32m        code="llm_invalid_action",[m
+[32m+[m[32m    )[m
+ [m
+ [m
+ def synthesize_answer([m
+     question: str,[m
+[32m+[m[32m    dataframe_summary: dict[str, Any],[m
+     tool_outputs: list[dict[str, Any]],[m
+[31m-    llm: LLMProvider,[m
+ ) -> dict[str, Any]:[m
+[31m-    system = ([m
+[31m-        "You are a data analyst. Answer ONLY using the tool results provided. "[m
+[31m-        "Do not invent numbers, correlations, or column names. "[m
+[31m-        "If evidence is insufficient, say so. "[m
+[31m-        "Respond with JSON: "[m
+[31m-        '{"answer": "...", "evidence": [{"finding": "...", "source": "tool_name", "value": ...}]}. '[m
+[31m-        "Each evidence item must cite a tool from tools_used and use values present in the results."[m
+[31m-    )[m
+[31m-    user = ([m
+[31m-        f"Question: {question}\n\n"[m
+[31m-        f"Tool results (JSON):\n{json.dumps(tool_outputs, default=str)}\n"[m
+[31m-    )[m
+[32m+[m[32m    """Generate a final answer based on the available analysis results."""[m
+[32m+[m
+     messages = [[m
+[31m-        {"role": "system", "content": system},[m
+[31m-        {"role": "user", "content": user},[m
+[32m+[m[32m        {[m
+[32m+[m[32m            "role": "system",[m
+[32m+[m[32m            "content": ([m
+[32m+[m[32m                "You are a careful data analyst.\n"[m
+[32m+[m[32m                "Answer the user's question using only the supplied "[m
+[32m+[m[32m                "dataset summary and analysis tool results.\n"[m
+[32m+[m[32m                "Do not invent statistics or findings.\n"[m
+[32m+[m[32m                "Return one valid JSON object with this structure:\n"[m
+[32m+[m[32m                '{"answer":"your answer","evidence":'[m
+[32m+[m[32m                '[{"source":"tool name","finding":"supported finding"}]}\n'[m
+[32m+[m[32m                "If evidence is insufficient, explain the limitation.\n"[m
+[32m+[m[32m                "Do not call functions or tools yourself."[m
+[32m+[m[32m            ),[m
+[32m+[m[32m        },[m
+[32m+[m[32m        {[m
+[32m+[m[32m            "role": "user",[m
+[32m+[m[32m            "content": json.dumps([m
+[32m+[m[32m                {[m
+[32m+[m[32m                    "question": question,[m
+[32m+[m[32m                    "dataframe_summary": dataframe_summary,[m
+[32m+[m[32m                    "tool_outputs": tool_outputs,[m
+[32m+[m[32m                },[m
+[32m+[m[32m                ensure_ascii=False,[m
+[32m+[m[32m                default=str,[m
+[32m+[m[32m            ),[m
+[32m+[m[32m        },[m
+     ][m
+[31m-    raw = llm.chat(messages, json_mode=True) if llm is not None else llm_client.complete(messages, json_mode=True)[m
+[31m-    payload = _parse_json_object(raw)[m
+[31m-    answer = payload.get("answer")[m
+[31m-    evidence = payload.get("evidence")[m
+[31m-    if not isinstance(answer, str) or not answer.strip():[m
+[31m-        raise AgentError("LLM did not produce an answer.", code="llm_malformed_response")[m
+[32m+[m
+[32m+[m[32m    response = _complete(messages)[m
+[32m+[m[32m    result = _parse_json_object(response)[m
+[32m+[m
+[32m+[m[32m    answer = result.get("answer")[m
+[32m+[m[32m    evidence = result.get("evidence", [])[m
+[32m+[m
+[32m+[m[32m    if not isinstance(answer, str):[m
+[32m+[m[32m        raise AgentError([m
+[32m+[m[32m            "The language model returned an invalid answer.",[m
+[32m+[m[32m            code="llm_invalid_answer",[m
+[32m+[m[32m        )[m
+[32m+[m
+     if not isinstance(evidence, list):[m
+         evidence = [][m
+[31m-    available_tools = {output["tool"] for output in tool_outputs}[m
+[31m-    cleaned_evidence: list[dict[str, Any]] = [][m
+[32m+[m
+[32m+[m[32m    valid_evidence: list[dict[str, str]] = [][m
+[32m+[m
+     for item in evidence:[m
+[31m-        if ([m
+[31m-            isinstance(item, dict)[m
+[31m-            and item.get("finding")[m
+[31m-            and isinstance(item.get("source"), str)[m
+[31m-            and item["source"] in available_tools[m
+[31m-            and ([m
+[31m-                "value" not in item[m
+[31m-                or any([m
+[31m-                    output["tool"] == item["source"][m
+[31m-                    and _result_contains(item["value"], output["result"])[m
+[31m-                    for output in tool_outputs[m
+[31m-                )[m
+[31m-            )[m
+[31m-        ):[m
+[31m-            cleaned_evidence.append([m
+[32m+[m[32m        if not isinstance(item, dict):[m
+[32m+[m[32m            continue[m
+[32m+[m
+[32m+[m[32m        source = item.get("source")[m
+[32m+[m[32m        finding = item.get("finding")[m
+[32m+[m
+[32m+[m[32m        if isinstance(source, str) and isinstance(finding, str):[m
+[32m+[m[32m            valid_evidence.append([m
+                 {[m
+[31m-                    "finding": str(item["finding"]),[m
+[31m-                    "source": str(item["source"]),[m
+[31m-                    "value": item.get("value"),[m
+[32m+[m[32m                    "source": source,[m
+[32m+[m[32m                    "finding": finding,[m
+                 }[m
+             )[m
+[31m-    return {"answer": answer.strip(), "evidence": cleaned_evidence}[m
+[32m+[m
+[32m+[m[32m    return {[m
+[32m+[m[32m        "answer": answer,[m
+[32m+[m[32m        "evidence": valid_evidence,[m
+[32m+[m[32m    }[m
+ [m
+ [m
+[31m-def _step_summary(result: dict[str, Any]) -> str:[m
+[31m-    summary = json.dumps(result.get("result", {}), ensure_ascii=True, default=str)[m
+[31m-    if len(summary) > 240:[m
+[31m-        return summary[:237] + "..."[m
+[31m-    return summary[m
+[32m+[m[32mdef investigate([m
+[32m+[m[32m    question: str,[m
+[32m+[m[32m    dataframe: Any,[m
+[32m+[m[32m) -> dict[str, Any]:[m
+[32m+[m[32m    """Investigate a question about a dataframe using registered tools."""[m
+ [m
+[32m+[m[32m    if not isinstance(question, str) or not question.strip():[m
+[32m+[m[32m        raise AgentError([m
+[32m+[m[32m            "Please provide a question.",[m
+[32m+[m[32m            code="invalid_question",[m
+[32m+[m[32m        )[m
+ [m
+[31m-def investigate(question: str, dataframe, llm: LLMProvider | None = None) -> dict[str, Any]:[m
+[31m-    q = (question or "").strip()[m
+[31m-    if not q:[m
+[31m-        raise AgentError("Question must not be empty.", code="invalid_question")[m
+[31m-    if dataframe is None or len(dataframe.index) == 0:[m
+[31m-        raise AgentError("Dataset is empty.", code="empty_dataset")[m
+[32m+[m[32m    if dataframe is None:[m
+[32m+[m[32m        raise AgentError([m
+[32m+[m[32m            "No dataset is available for analysis.",[m
+[32m+[m[32m            code="missing_dataframe",[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m    if not isinstance(dataframe, pd.DataFrame):[m
+[32m+[m[32m        raise AgentError([m
+[32m+[m[32m            "The uploaded dataset is not a valid DataFrame.",[m
+[32m+[m[32m            code="invalid_dataframe",[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m    question = question.strip()[m
+ [m
+[31m-    steps: list[dict[str, Any]] = [][m
+     try:[m
+[31m-        analysis = analyze_dataframe(dataframe)[m
+[31m-        for _ in range(MAX_AGENT_STEPS):[m
+[31m-            decision = decide_next_action(q, steps, llm)[m
+[31m-            if decision["action"] == "finish":[m
+[32m+[m[32m        # Calculate dataset analysis once and reuse it for every tool.[m
+[32m+[m[32m        dataframe_summary = analyze_dataframe(dataframe)[m
+[32m+[m
+[32m+[m[32m        steps: list[dict[str, Any]] = [][m
+[32m+[m
+[32m+[m[32m        for step_number in range(MAX_AGENT_STEPS):[m
+[32m+[m[32m            action = decide_next_action([m
+[32m+[m[32m                question=question,[m
+[32m+[m[32m                dataframe_summary=dataframe_summary,[m
+[32m+[m[32m                previous_steps=steps,[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m            if action.get("action") == "finish":[m
+[32m+[m[32m                logger.info([m
+[32m+[m[32m                    "Agent finished investigation: %s",[m
+[32m+[m[32m                    action.get("reason", ""),[m
+[32m+[m[32m                )[m
+                 break[m
+[31m-            tool_name = decision["tool"][m
+[32m+[m
+[32m+[m[32m            tool_name = action["tool"][m
+[32m+[m[32m            reason = action.get("reason", "")[m
+[32m+[m
+[32m+[m[32m            logger.info([m
+[32m+[m[32m                "Running agent tool %s (step %s/%s)",[m
+[32m+[m[32m                tool_name,[m
+[32m+[m[32m                step_number + 1,[m
+[32m+[m[32m                MAX_AGENT_STEPS,[m
+[32m+[m[32m            )[m
+[32m+[m
+             try:[m
+[31m-                result = run_tool(tool_name, dataframe, analysis)[m
+[31m-            except Exception as exc:[m
+[31m-                logger.exception("Tool execution failed: %s", tool_name)[m
+[31m-                raise AgentError([m
+[31m-                    "An analysis tool failed while processing the dataset.",[m
+[31m-                    code="tool_failure",[m
+[31m-                ) from exc[m
+[31m-            steps.append({"tool": tool_name, "reason": decision["reason"], "result": result})[m
+[32m+[m[32m                # IMPORTANT:[m
+[32m+[m[32m                # run_tool requires three arguments:[m
+[32m+[m[32m                # tool name, DataFrame, and precomputed analysis.[m
+[32m+[m[32m                tool_result = run_tool([m
+[32m+[m[32m                    tool_name,[m
+[32m+[m[32m                    dataframe,[m
+[32m+[m[32m                    dataframe_summary,[m
+[32m+[m[32m                )[m
+ [m
+[31m-        reached_limit = len(steps) == MAX_AGENT_STEPS[m
+[31m-        synthesis = synthesize_answer(q, [step["result"] for step in steps], llm)[m
+[31m-    except LLMError as exc:[m
+[31m-        raise AgentError(str(exc), code="llm_unavailable") from exc[m
+[32m+[m[32m                steps.append([m
+[32m+[m[32m                    {[m
+[32m+[m[32m                        "tool": tool_name,[m
+[32m+[m[32m                        "reason": reason,[m
+[32m+[m[32m                        "result": tool_result,[m
+[32m+[m[32m                    }[m
+[32m+[m[32m                )[m
+ [m
+[31m-    answer = synthesis["answer"][m
+[31m-    if reached_limit:[m
+[31m-        answer += f"\n\nInvestigation limit reached ({MAX_AGENT_STEPS} steps); this answer uses the evidence collected so far."[m
+[32m+[m[32m            except Exception as exc:[m
+[32m+[m[32m                logger.exception([m
+[32m+[m[32m                    "Tool execution failed: %s",[m
+[32m+[m[32m                    tool_name,[m
+[32m+[m[32m                )[m
+ [m
+[31m-    return {[m
+[31m-        "question": q,[m
+[31m-        "answer": answer,[m
+[31m-        "evidence": synthesis["evidence"],[m
+[31m-        "tools_used": [step["tool"] for step in steps],[m
+[31m-        "tool_results": [step["result"] for step in steps],[m
+[31m-        "investigation": [[m
+[32m+[m[32m                steps.append([m
+[32m+[m[32m                    {[m
+[32m+[m[32m                        "tool": tool_name,[m
+[32m+[m[32m                        "reason": reason,[m
+[32m+[m[32m                        "error": str(exc),[m
+[32m+[m[32m                    }[m
+[32m+[m[32m                )[m
+[32m+[m
+[32m+[m[32m        # Only pass the collected tool outputs to the answer generator.[m
+[32m+[m[32m        tool_outputs = [[m
+             {[m
+[31m-                "step": index,[m
+                 "tool": step["tool"],[m
+[31m-                "reason": step["reason"],[m
+[31m-                "summary": _step_summary(step["result"]),[m
+[32m+[m[32m                "result": step.get("result"),[m
+[32m+[m[32m                "error": step.get("error"),[m
+             }[m
+[31m-            for index, step in enumerate(steps, start=1)[m
+[31m-        ],[m
+[31m-    }[m
+[32m+[m[32m            for step in steps[m
+[32m+[m[32m        ][m
+[32m+[m
+[32m+[m[32m        # Avoid asking the LLM to invent an answer when no tool succeeded.[m
+[32m+[m[32m        successful_steps = [[m
+[32m+[m[32m            step for step in steps if "result" in step[m
+[32m+[m[32m        ][m
+[32m+[m
+[32m+[m[32m        if steps and not successful_steps:[m
+[32m+[m[32m            raise AgentError([m
+[32m+[m[32m                "The investigation could not produce any successful "[m
+[32m+[m[32m                "analysis results. Check the backend logs.",[m
+[32m+[m[32m                code="no_successful_tools",[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m        final_result = synthesize_answer([m
+[32m+[m[32m            question=question,[m
+[32m+[m[32m            dataframe_summary=dataframe_summary,[m
+[32m+[m[32m            tool_outputs=tool_outputs,[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "question": question,[m
+[32m+[m[32m            "answer": final_result["answer"],[m
+[32m+[m[32m            "evidence": final_result["evidence"],[m
+[32m+[m[32m            "tools_used": [[m
+[32m+[m[32m                step["tool"] for step in successful_steps[m
+[32m+[m[32m            ],[m
+[32m+[m[32m            "tool_results": tool_outputs,[m
+[32m+[m[32m            "investigation": steps,[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m    except LLMError as exc:[m
+[32m+[m[32m        logger.exception("LLM error during investigation.")[m
+[32m+[m
+[32m+[m[32m        raise AgentError([m
+[32m+[m[32m            "The language model request failed. Check the backend logs.",[m
+[32m+[m[32m            code="llm_unavailable",[m
+[32m+[m[32m        ) from exc[m
+[32m+[m
+[32m+[m[32m    except AgentError:[m
+[32m+[m[32m        raise[m
+[32m+[m
+[32m+[m[32m    except Exception as exc:[m
+[32m+[m[32m        logger.exception("Investigation failed.")[m
+[32m+[m
+[32m+[m[32m        raise AgentError([m
+[32m+[m[32m            "The investigation failed. Check the backend logs.",[m
+[32m+[m[32m            code="investigation_failed",[m
+[32m+[m[32m        ) from exc[m
+\ No newline at end of file[m
+[1mdiff --git a/backend/agent/llm_client.py b/backend/agent/llm_client.py[m
+[1mindex cdb7082..426ab12 100644[m
+[1m--- a/backend/agent/llm_client.py[m
+[1m+++ b/backend/agent/llm_client.py[m
+[36m@@ -1,178 +1,365 @@[m
+[31m-"""Provider-agnostic HTTP client for supported LLM providers."""[m
+[31m-[m
+[31m-from __future__ import annotations[m
+[31m-[m
+ import json[m
+[32m+[m[32mimport logging[m
+ import os[m
+[32m+[m[32mimport traceback[m
+ from pathlib import Path[m
+[31m-import socket[m
+[31m-import urllib.error[m
+[31m-import urllib.parse[m
+[31m-import urllib.request[m
+[31m-from typing import Any[m
+[32m+[m[32mfrom urllib.error import HTTPError, URLError[m
+[32m+[m[32mfrom urllib.request import Request, urlopen[m
+ [m
+ from dotenv import load_dotenv[m
+ [m
+ [m
+[31m-ENV_FILE = Path(__file__).resolve().parents[1] / ".env"[m
+[32m+[m[32mlogger = logging.getLogger(__name__)[m
+[32m+[m
+[32m+[m[32m# Load .env from the Tablyze project root.[m
+[32m+[m[32mENV_FILE = Path(__file__).resolve().parents[2] / ".env"[m
+ load_dotenv(dotenv_path=ENV_FILE, override=False)[m
+ [m
+ [m
+ class LLMError(Exception):[m
+[31m-    """Raised for configuration, transport, provider, or response failures."""[m
+[32m+[m[32m    """Raised when an LLM request fails."""[m
+[32m+[m
+[32m+[m[32m    def __init__([m
+[32m+[m[32m        self,[m
+[32m+[m[32m        message: str,[m
+[32m+[m[32m        status_code: int | None = None,[m
+[32m+[m[32m    ):[m
+[32m+[m[32m        super().__init__(message)[m
+[32m+[m[32m        self.message = message[m
+[32m+[m[32m        self.status_code = status_code[m
+ [m
+ [m
+[31m-def _timeout_seconds() -> float:[m
+[32m+[m[32mdef _timeout_seconds() -> int:[m
+[32m+[m[32m    """Return the configured request timeout."""[m
+[32m+[m
+     try:[m
+[31m-        return max(0.1, float(os.getenv("LLM_TIMEOUT_SECONDS", "60")))[m
+[32m+[m[32m        return max(1, int(os.getenv("LLM_TIMEOUT_SECONDS", "60")))[m
+     except ValueError:[m
+[31m-        return 60.0[m
+[32m+[m[32m        return 60[m
+ [m
+ [m
+ def _request_json([m
+     url: str,[m
+[31m-    payload: dict[str, Any],[m
+[31m-    headers: dict[str, str] | None = None,[m
+[31m-) -> dict[str, Any]:[m
+[31m-    request = urllib.request.Request([m
+[31m-        url,[m
+[32m+[m[32m    headers: dict,[m
+[32m+[m[32m    payload: dict,[m
+[32m+[m[32m    timeout: int,[m
+[32m+[m[32m) -> dict:[m
+[32m+[m[32m    """Send an HTTP POST request and parse the JSON response."""[m
+[32m+[m
+[32m+[m[32m    request = Request([m
+[32m+[m[32m        url=url,[m
+         data=json.dumps(payload).encode("utf-8"),[m
+[31m-        headers={[m
+[31m-            "Content-Type": "application/json",[m
+[31m-            "User-Agent": "tabexplain/1.0",[m
+[31m-            **(headers or {}),[m
+[31m-        },[m
+[32m+[m[32m        headers=headers,[m
+         method="POST",[m
+     )[m
+[31m-    last_error: LLMError | None = None[m
+[31m-    for attempt in range(2):[m
+[31m-        try:[m
+[31m-            with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:[m
+[31m-                status = getattr(response, "status", None)[m
+[31m-                if status is None:[m
+[31m-                    status = response.getcode()[m
+[31m-                raw = response.read().decode("utf-8")[m
+[31m-            if status >= 500:[m
+[31m-                raise LLMError("The LLM provider returned a server error.")[m
+[31m-            if status != 200:[m
+[31m-                raise LLMError("The LLM provider rejected the request.")[m
+[31m-            try:[m
+[31m-                parsed = json.loads(raw)[m
+[31m-            except json.JSONDecodeError as exc:[m
+[31m-                raise LLMError("The LLM provider returned invalid JSON.") from exc[m
+[31m-            if not isinstance(parsed, dict):[m
+[31m-                raise LLMError("The LLM provider returned an invalid response.")[m
+[31m-            return parsed[m
+[31m-        except urllib.error.HTTPError as exc:[m
+[31m-            if 400 <= exc.code < 500:[m
+[31m-                raise LLMError("The LLM provider rejected the request.") from exc[m
+[31m-            last_error = LLMError("The LLM provider returned a server error.")[m
+[31m-        except (TimeoutError, socket.timeout):[m
+[31m-            last_error = LLMError("The LLM provider request timed out.")[m
+[31m-        except (ConnectionError, OSError):[m
+[31m-            last_error = LLMError("The LLM provider could not be reached.")[m
+[31m-        except urllib.error.URLError as exc:[m
+[31m-            last_error = LLMError("The LLM provider could not be reached.")[m
+[31m-        except LLMError as exc:[m
+[31m-            if "server error" not in str(exc):[m
+[31m-                raise[m
+[31m-            last_error = exc[m
+[31m-        if attempt == 0:[m
+[31m-            continue[m
+[31m-    raise last_error or LLMError("The LLM provider request failed.")[m
+ [m
+[32m+[m[32m    try:[m
+[32m+[m[32m        with urlopen(request, timeout=timeout) as response:[m
+[32m+[m[32m            response_text = response.read().decode("utf-8")[m
+[32m+[m[32m            return json.loads(response_text)[m
+[32m+[m
+[32m+[m[32m    except HTTPError as exc:[m
+[32m+[m[32m        error_body = exc.read().decode("utf-8", errors="replace")[m
+[32m+[m
+[32m+[m[32m        logger.error("========== LLM API ERROR ==========")[m
+[32m+[m[32m        logger.error("HTTP Status: %s", exc.code)[m
+[32m+[m[32m        logger.error("Error Details: %s", error_body)[m
+[32m+[m[32m        logger.error("===================================")[m
+[32m+[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            f"LLM API returned HTTP {exc.code}: {error_body[:500]}",[m
+[32m+[m[32m            status_code=exc.code,[m
+[32m+[m[32m        ) from exc[m
+[32m+[m
+[32m+[m[32m    except URLError as exc:[m
+[32m+[m[32m        logger.exception("Unable to connect to the LLM API.")[m
+[32m+[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            f"Could not connect to the LLM API: {exc.reason}"[m
+[32m+[m[32m        ) from exc[m
+[32m+[m
+[32m+[m[32m    except json.JSONDecodeError as exc:[m
+[32m+[m[32m        logger.exception("The LLM API returned invalid JSON.")[m
+[32m+[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            "The LLM API returned an invalid JSON response."[m
+[32m+[m[32m        ) from exc[m
+[32m+[m
+[32m+[m[32m    except TimeoutError as exc:[m
+[32m+[m[32m        logger.exception("The LLM API request timed out.")[m
+[32m+[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            "The LLM API request timed out."[m
+[32m+[m[32m        ) from exc[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef _extract_openai_content(response: dict) -> str:[m
+[32m+[m[32m    """Extract assistant text from an OpenAI-compatible response."""[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        content = response["choices"][0]["message"]["content"][m
+[32m+[m
+[32m+[m[32m        if isinstance(content, str):[m
+[32m+[m[32m            return content[m
+[32m+[m
+[32m+[m[32m        if isinstance(content, list):[m
+[32m+[m[32m            text_parts = [][m
+[32m+[m
+[32m+[m[32m            for item in content:[m
+[32m+[m[32m                if isinstance(item, dict) and item.get("type") == "text":[m
+[32m+[m[32m                    text_parts.append(item.get("text", ""))[m
+[32m+[m
+[32m+[m[32m            if text_parts:[m
+[32m+[m[32m                return "\n".join(text_parts)[m
+ [m
+[31m-def _ollama(messages: list[dict[str, str]], json_mode: bool) -> str:[m
+[31m-    base_url = os.getenv("LLM_BASE_URL", "http://127.0.0.1:11434").rstrip("/")[m
+[31m-    payload: dict[str, Any] = {[m
+[31m-        "model": os.getenv("LLM_MODEL", "llama3.2"),[m
+[32m+[m[32m        raise ValueError("Assistant response contains no text.")[m
+[32m+[m
+[32m+[m[32m    except (KeyError, IndexError, TypeError, ValueError) as exc:[m
+[32m+[m[32m        logger.exception("Unexpected OpenAI-compatible response format.")[m
+[32m+[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            "Could not extract text from the LLM response."[m
+[32m+[m[32m        ) from exc[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef _ollama([m
+[32m+[m[32m    messages: list[dict],[m
+[32m+[m[32m    json_mode: bool = False,[m
+[32m+[m[32m) -> str:[m
+[32m+[m[32m    """Send a request to Ollama."""[m
+[32m+[m
+[32m+[m[32m    base_url = os.getenv([m
+[32m+[m[32m        "OLLAMA_BASE_URL",[m
+[32m+[m[32m        "http://localhost:11434",[m
+[32m+[m[32m    ).rstrip("/")[m
+[32m+[m
+[32m+[m[32m    model = os.getenv("LLM_MODEL", "llama3.2")[m
+[32m+[m
+[32m+[m[32m    url = f"{base_url}/api/chat"[m
+[32m+[m
+[32m+[m[32m    headers = {[m
+[32m+[m[32m        "Content-Type": "application/json",[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    payload = {[m
+[32m+[m[32m        "model": model,[m
+         "messages": messages,[m
+         "stream": False,[m
+     }[m
+[32m+[m
+     if json_mode:[m
+         payload["format"] = "json"[m
+[31m-    response = _request_json(f"{base_url}/api/chat", payload)[m
+[31m-    content = response.get("message", {}).get("content")[m
+[31m-    if not isinstance(content, str) or not content.strip():[m
+[31m-        raise LLMError("The LLM provider returned an empty response.")[m
+[31m-    return content.strip()[m
+ [m
+[32m+[m[32m    response = _request_json([m
+[32m+[m[32m        url,[m
+[32m+[m[32m        headers,[m
+[32m+[m[32m        payload,[m
+[32m+[m[32m        _timeout_seconds(),[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        return response["message"]["content"][m
+[32m+[m
+[32m+[m[32m    except (KeyError, TypeError) as exc:[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            "Unexpected Ollama response format."[m
+[32m+[m[32m        ) from exc[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef _groq([m
+[32m+[m[32m    messages: list[dict],[m
+[32m+[m[32m    json_mode: bool = False,[m
+[32m+[m[32m) -> str:[m
+[32m+[m[32m    """Send a request to Groq."""[m
+ [m
+[31m-def _groq(messages: list[dict[str, str]], json_mode: bool) -> str:[m
+     api_key = os.getenv("GROQ_API_KEY")[m
+[32m+[m
+     if not api_key:[m
+[31m-        raise LLMError("GROQ_API_KEY is required for the Groq provider.")[m
+[31m-    payload: dict[str, Any] = {[m
+[31m-        "model": os.getenv("LLM_MODEL", "openai/gpt-oss-20b"),[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            "GROQ_API_KEY is missing from the project .env file."[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m    model = os.getenv([m
+[32m+[m[32m        "LLM_MODEL",[m
+[32m+[m[32m        "llama-3.3-70b-versatile",[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m    url = "https://api.groq.com/openai/v1/chat/completions"[m
+[32m+[m
+[32m+[m[32m    headers = {[m
+[32m+[m[32m        "Authorization": f"Bearer {api_key}",[m
+[32m+[m[32m        "Content-Type": "application/json",[m
+[32m+[m[32m        "User-Agent": "Tablyze/1.0",[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    payload = {[m
+[32m+[m[32m        "model": model,[m
+         "messages": messages,[m
+     }[m
+[32m+[m
+[32m+[m[32m    if not model.startswith("openai/gpt-oss-"):[m
+[32m+[m[32m        payload["temperature"] = 0.2[m
+[32m+[m
+     if json_mode:[m
+[31m-        payload["response_format"] = {"type": "json_object"}[m
+[32m+[m[32m        payload["response_format"] = {[m
+[32m+[m[32m            "type": "json_object",[m
+[32m+[m[32m        }[m
+[32m+[m
+     response = _request_json([m
+[31m-        "https://api.groq.com/openai/v1/chat/completions",[m
+[32m+[m[32m        url,[m
+[32m+[m[32m        headers,[m
+         payload,[m
+[31m-        {"Authorization": f"Bearer {api_key}"},[m
+[32m+[m[32m        _timeout_seconds(),[m
+     )[m
+[31m-    try:[m
+[31m-        content = response["choices"][0]["message"]["content"][m
+[31m-    except (KeyError, IndexError, TypeError) as exc:[m
+[31m-        raise LLMError("The LLM provider returned an invalid response.") from exc[m
+[31m-    if not isinstance(content, str) or not content.strip():[m
+[31m-        raise LLMError("The LLM provider returned an empty response.")[m
+[31m-    return content.strip()[m
+[31m-[m
+[31m-[m
+[31m-def _gemini_messages(messages: list[dict[str, str]]) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:[m
+[31m-    system_parts = [[m
+[31m-        {"text": message["content"]}[m
+[31m-        for message in messages[m
+[31m-        if message.get("role") == "system"[m
+[31m-    ][m
+[31m-    contents = [[m
+[31m-        {[m
+[31m-            "role": "model" if message.get("role") == "assistant" else "user",[m
+[31m-            "parts": [{"text": message["content"]}],[m
+[31m-        }[m
+[31m-        for message in messages[m
+[31m-        if message.get("role") != "system"[m
+[31m-    ][m
+[31m-    return ({"parts": system_parts} if system_parts else None), contents[m
+ [m
+[32m+[m[32m    return _extract_openai_content(response)[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef _gemini_messages(messages: list[dict]) -> list[dict]:[m
+[32m+[m[32m    """Convert chat messages into Gemini's contents format."""[m
+[32m+[m
+[32m+[m[32m    contents = [][m
+[32m+[m[32m    system_parts = [][m
+[32m+[m
+[32m+[m[32m    for message in messages:[m
+[32m+[m[32m        role = message.get("role", "user")[m
+[32m+[m[32m        content = message.get("content", "")[m
+[32m+[m
+[32m+[m[32m        if not isinstance(content, str):[m
+[32m+[m[32m            content = json.dumps(content, default=str)[m
+[32m+[m
+[32m+[m[32m        if role == "system":[m
+[32m+[m[32m            system_parts.append(content)[m
+[32m+[m[32m            continue[m
+[32m+[m
+[32m+[m[32m        gemini_role = "model" if role == "assistant" else "user"[m
+[32m+[m
+[32m+[m[32m        contents.append([m
+[32m+[m[32m            {[m
+[32m+[m[32m                "role": gemini_role,[m
+[32m+[m[32m                "parts": [{"text": content}],[m
+[32m+[m[32m            }[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m    return contents, "\n\n".join(system_parts)[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef _gemini([m
+[32m+[m[32m    messages: list[dict],[m
+[32m+[m[32m    json_mode: bool = False,[m
+[32m+[m[32m) -> str:[m
+[32m+[m[32m    """Send a request to the Gemini API."""[m
+ [m
+[31m-def _gemini(messages: list[dict[str, str]], json_mode: bool) -> str:[m
+     api_key = os.getenv("GEMINI_API_KEY")[m
+[32m+[m
+     if not api_key:[m
+[31m-        raise LLMError("GEMINI_API_KEY is required for the Gemini provider.")[m
+[31m-    model = os.getenv("LLM_MODEL", "gemini-2.0-flash")[m
+[31m-    system_instruction, contents = _gemini_messages(messages)[m
+[31m-    payload: dict[str, Any] = {"contents": contents}[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            "GEMINI_API_KEY is missing from the project .env file."[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m    model = os.getenv([m
+[32m+[m[32m        "LLM_MODEL",[m
+[32m+[m[32m        "gemini-2.5-flash",[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m    url = ([m
+[32m+[m[32m        "https://generativelanguage.googleapis.com/v1beta/"[m
+[32m+[m[32m        f"models/{model}:generateContent"[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m    headers = {[m
+[32m+[m[32m        "Content-Type": "application/json",[m
+[32m+[m[32m        "x-goog-api-key": api_key,[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    contents, system_instruction = _gemini_messages(messages)[m
+[32m+[m
+[32m+[m[32m    payload = {[m
+[32m+[m[32m        "contents": contents,[m
+[32m+[m[32m        "generationConfig": {[m
+[32m+[m[32m            "temperature": 0.2,[m
+[32m+[m[32m        },[m
+[32m+[m[32m    }[m
+[32m+[m
+     if system_instruction:[m
+[31m-        payload["systemInstruction"] = system_instruction[m
+[32m+[m[32m        payload["systemInstruction"] = {[m
+[32m+[m[32m            "parts": [{"text": system_instruction}],[m
+[32m+[m[32m        }[m
+[32m+[m
+     if json_mode:[m
+[31m-        payload["generationConfig"] = {"responseMimeType": "application/json"}[m
+[31m-    query = urllib.parse.urlencode({"key": api_key})[m
+[32m+[m[32m        payload["generationConfig"]["responseMimeType"] = ([m
+[32m+[m[32m            "application/json"[m
+[32m+[m[32m        )[m
+[32m+[m
+     response = _request_json([m
+[31m-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?{query}",[m
+[32m+[m[32m        url,[m
+[32m+[m[32m        headers,[m
+         payload,[m
+[32m+[m[32m        _timeout_seconds(),[m
+     )[m
+[32m+[m
+     try:[m
+[31m-        content = response["candidates"][0]["content"]["parts"][0]["text"][m
+[31m-    except (KeyError, IndexError, TypeError) as exc:[m
+[31m-        raise LLMError("The LLM provider returned an invalid response.") from exc[m
+[31m-    if not isinstance(content, str) or not content.strip():[m
+[31m-        raise LLMError("The LLM provider returned an empty response.")[m
+[31m-    return content.strip()[m
+[31m-[m
+[31m-[m
+[31m-def complete(messages: list[dict[str, str]], json_mode: bool = False) -> str:[m
+[31m-    """Complete a chat request using the provider selected by ``LLM_PROVIDER``."""[m
+[31m-    provider = os.getenv("LLM_PROVIDER", "").strip().lower()[m
+[31m-    if not provider:[m
+[31m-        raise LLMError("LLM_PROVIDER is required. Use ollama, gemini, or groq.")[m
+[31m-    if provider == "ollama":[m
+[31m-        return _ollama(messages, json_mode)[m
+[31m-    if provider == "groq":[m
+[31m-        return _groq(messages, json_mode)[m
+[31m-    if provider == "gemini":[m
+[31m-        return _gemini(messages, json_mode)[m
+[31m-    raise LLMError("Unknown LLM_PROVIDER. Use ollama, gemini, or groq.")[m
+\ No newline at end of file[m
+[32m+[m[32m        parts = response["candidates"][0]["content"]["parts"][m
+[32m+[m[32m        text_parts = [[m
+[32m+[m[32m            part["text"][m
+[32m+[m[32m            for part in parts[m
+[32m+[m[32m            if isinstance(part, dict) and "text" in part[m
+[32m+[m[32m        ][m
+[32m+[m
+[32m+[m[32m        if not text_parts:[m
+[32m+[m[32m            raise ValueError("Gemini returned no text.")[m
+[32m+[m
+[32m+[m[32m        return "\n".join(text_parts)[m
+[32m+[m
+[32m+[m[32m    except (KeyError, IndexError, TypeError, ValueError) as exc:[m
+[32m+[m[32m        logger.exception("Unexpected Gemini response format.")[m
+[32m+[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            "Could not extract text from the Gemini response."[m
+[32m+[m[32m        ) from exc[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef complete([m
+[32m+[m[32m    messages: list[dict],[m
+[32m+[m[32m    json_mode: bool = False,[m
+[32m+[m[32m) -> str:[m
+[32m+[m[32m    """Send a chat request using the configured LLM provider."""[m
+[32m+[m
+[32m+[m[32m    provider = os.getenv([m
+[32m+[m[32m        "LLM_PROVIDER",[m
+[32m+[m[32m        "groq",[m
+[32m+[m[32m    ).strip().lower()[m
+[32m+[m
+[32m+[m[32m    logger.info([m
+[32m+[m[32m        "Sending LLM request: provider=%s, json_mode=%s",[m
+[32m+[m[32m        provider,[m
+[32m+[m[32m        json_mode,[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        if provider == "groq":[m
+[32m+[m[32m            return _groq(messages, json_mode)[m
+[32m+[m
+[32m+[m[32m        if provider == "ollama":[m
+[32m+[m[32m            return _ollama(messages, json_mode)[m
+[32m+[m
+[32m+[m[32m        if provider == "gemini":[m
+[32m+[m[32m            return _gemini(messages, json_mode)[m
+[32m+[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            f"Unsupported LLM provider: {provider}. "[m
+[32m+[m[32m            "Use groq, ollama, or gemini."[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m    except LLMError:[m
+[32m+[m[32m        raise[m
+[32m+[m
+[32m+[m[32m    except Exception as exc:[m
+[32m+[m[32m        logger.error([m
+[32m+[m[32m            "Unexpected error while calling the LLM:\n%s",[m
+[32m+[m[32m            traceback.format_exc(),[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        raise LLMError([m
+[32m+[m[32m            "Unexpected error while communicating with the LLM."[m
+[32m+[m[32m        ) from exc[m
+\ No newline at end of file[m
+[1mdiff --git a/backend/main.py b/backend/main.py[m
+[1mindex 7e7fbd8..3ea9e44 100644[m
+[1m--- a/backend/main.py[m
+[1m+++ b/backend/main.py[m
+[36m@@ -191,9 +191,18 @@[m [mdef agent_investigate(body: InvestigateRequest):[m
+             "investigation": payload["investigation"],[m
+         }[m
+     except AgentError as exc:[m
+[31m-        status = 503 if exc.code == "llm_unavailable" else 400[m
+[31m-        if exc.code == "empty_dataset":[m
+[32m+[m[32m        logger.warning("Agent investigation rejected: code=%s", exc.code)[m
+[32m+[m[32m        if exc.code in {[m
+[32m+[m[32m            "invalid_question",[m
+[32m+[m[32m            "missing_dataframe",[m
+[32m+[m[32m            "invalid_dataframe",[m
+[32m+[m[32m            "empty_dataset",[m
+[32m+[m[32m        }:[m
+             status = 400[m
+[32m+[m[32m        elif exc.code.startswith("llm_"):[m
+[32m+[m[32m            status = 502[m
+[32m+[m[32m        else:[m
+[32m+[m[32m            status = 500[m
+         return JSONResponse([m
+             content={"error": str(exc), "code": exc.code},[m
+             status_code=status,[m
+[1mdiff --git a/backend/tests/test_agent.py b/backend/tests/test_agent.py[m
+[1mindex f74f322..65d976d 100644[m
+[1m--- a/backend/tests/test_agent.py[m
+[1m+++ b/backend/tests/test_agent.py[m
+[36m@@ -113,6 +113,51 @@[m [mclass AgentInvestigationTests(unittest.TestCase):[m
+         self.assertEqual(raised.exception.code, "tool_failure")[m
+         self.assertNotIn("private details", str(raised.exception))[m
+ [m
+[32m+[m[32m    def test_llm_failure_is_reported_as_unavailable(self):[m
+[32m+[m[32m        with patch.object([m
+[32m+[m[32m            agent.llm_client,[m
+[32m+[m[32m            "complete",[m
+[32m+[m[32m            side_effect=agent.LLMError("provider rejected the request"),[m
+[32m+[m[32m        ):[m
+[32m+[m[32m            with self.assertRaises(agent.AgentError) as raised:[m
+[32m+[m[32m                agent.investigate("Inspect this data.", self.dataframe)[m
+[32m+[m
+[32m+[m[32m        self.assertEqual(raised.exception.code, "llm_unavailable")[m
+[32m+[m
+[32m+[m[32m    def test_malformed_decision_retries_and_completes(self):[m
+[32m+[m[32m        responses = [[m
+[32m+[m[32m            "not json",[m
+[32m+[m[32m            json.dumps([m
+[32m+[m[32m                {[m
+[32m+[m[32m                    "action": "run_tool",[m
+[32m+[m[32m                    "tool": "profile_dataset",[m
+[32m+[m[32m                    "reason": "Profile the uploaded data.",[m
+[32m+[m[32m                }[m
+[32m+[m[32m            ),[m
+[32m+[m[32m            json.dumps({"action": "finish", "reason": "Analysis is complete."}),[m
+[32m+[m[32m            json.dumps({"answer": "The dataset is profiled.", "evidence": []}),[m
+[32m+[m[32m        ][m
+[32m+[m[32m        with patch.object(agent.llm_client, "complete", side_effect=responses):[m
+[32m+[m[32m            result = agent.investigate("Profile this dataset.", self.dataframe)[m
+[32m+[m
+[32m+[m[32m        self.assertEqual(result["tools_used"], ["profile_dataset"])[m
+[32m+[m
+[32m+[m[32m    def test_finish_without_tool_uses_dataset_summary(self):[m
+[32m+[m[32m        responses = [[m
+[32m+[m[32m            json.dumps({"action": "finish", "reason": "Summary is sufficient."}),[m
+[32m+[m[32m            json.dumps([m
+[32m+[m[32m                {[m
+[32m+[m[32m                    "answer": "The dataset has three rows.",[m
+[32m+[m[32m                    "evidence": [],[m
+[32m+[m[32m                }[m
+[32m+[m[32m            ),[m
+[32m+[m[32m        ][m
+[32m+[m[32m        with patch.object(agent.llm_client, "complete", side_effect=responses):[m
+[32m+[m[32m            result = agent.investigate("How many rows are there?", self.dataframe)[m
+[32m+[m
+[32m+[m[32m        self.assertEqual(result["answer"], "The dataset has three rows.")[m
+[32m+[m[32m        self.assertEqual(result["tools_used"], [])[m
+[32m+[m
+     def test_evidence_must_reference_an_executed_tool(self):[m
+         llm = ScriptedLLM([m
+             [[m
+[1mdiff --git a/backend/tests/test_llm_client.py b/backend/tests/test_llm_client.py[m
+[1mindex b83e176..6baf367 100644[m
+[1m--- a/backend/tests/test_llm_client.py[m
+[1m+++ b/backend/tests/test_llm_client.py[m
+[36m@@ -32,7 +32,7 @@[m [mclass LLMClientTests(unittest.TestCase):[m
+     def test_ollama_request_shape(self):[m
+         response = {"message": {"content": '{"ok": true}'} }[m
+         with patch.dict(os.environ, {"LLM_PROVIDER": "ollama", "LLM_MODEL": "local-model", "LLM_BASE_URL": "http://localhost:11434", "LLM_TIMEOUT_SECONDS": "12"}, clear=True):[m
+[31m-            with patch("agent.llm_client.urllib.request.urlopen", return_value=FakeResponse(response)) as request:[m
+[32m+[m[32m            with patch("agent.llm_client.urlopen", return_value=FakeResponse(response)) as request:[m
+                 result = llm_client.complete(self.messages, json_mode=True)[m
+ [m
+         payload = json.loads(request.call_args.args[0].data.decode("utf-8"))[m
+[36m@@ -45,7 +45,7 @@[m [mclass LLMClientTests(unittest.TestCase):[m
+     def test_groq_request_shape(self):[m
+         response = {"choices": [{"message": {"content": '{"ok": true}'}}]}[m
+         with patch.dict(os.environ, {"LLM_PROVIDER": "groq", "GROQ_API_KEY": "secret", "LLM_MODEL": "groq-model"}, clear=True):[m
+[31m-            with patch("agent.llm_client.urllib.request.urlopen", return_value=FakeResponse(response)) as request:[m
+[32m+[m[32m            with patch("agent.llm_client.urlopen", return_value=FakeResponse(response)) as request:[m
+                 result = llm_client.complete(self.messages, json_mode=True)[m
+ [m
+         payload = json.loads(request.call_args.args[0].data.decode("utf-8"))[m
+[36m@@ -53,6 +53,30 @@[m [mclass LLMClientTests(unittest.TestCase):[m
+         self.assertEqual(request.call_args.args[0].full_url, "https://api.groq.com/openai/v1/chat/completions")[m
+         self.assertEqual(payload["response_format"], {"type": "json_object"})[m
+         self.assertEqual(request.call_args.args[0].get_header("Authorization"), "Bearer secret")[m
+[32m+[m[32m        self.assertEqual(request.call_args.args[0].get_header("User-agent"), "Tablyze/1.0")[m
+[32m+[m
+[32m+[m[32m    def test_groq_gpt_oss_request_omits_unsupported_temperature(self):[m
+[32m+[m[32m        response = {"choices": [{"message": {"content": '{"ok": true}'}}]}[m
+[32m+[m[32m        with patch.dict([m
+[32m+[m[32m            os.environ,[m
+[32m+[m[32m            {[m
+[32m+[m[32m                "LLM_PROVIDER": "groq",[m
+[32m+[m[32m                "GROQ_API_KEY": "secret",[m
+[32m+[m[32m                "LLM_MODEL": "openai/gpt-oss-20b",[m
+[32m+[m[32m            },[m
+[32m+[m[32m            clear=True,[m
+[32m+[m[32m        ):[m
+[32m+[m[32m            with patch([m
+[32m+[m[32m                "agent.llm_client.urlopen",[m
+[32m+[m[32m                return_value=FakeResponse(response),[m
+[32m+[m[32m            ) as request:[m
+[32m+[m[32m                result = llm_client.complete(self.messages, json_mode=True)[m
+[32m+[m
+[32m+[m[32m        payload = json.loads(request.call_args.args[0].data.decode("utf-8"))[m
+[32m+[m[32m        self.assertEqual(result, '{"ok": true}')[m
+[32m+[m[32m        self.assertEqual(payload["model"], "openai/gpt-oss-20b")[m
+[32m+[m[32m        self.assertNotIn("temperature", payload)[m
+[32m+[m[32m        self.assertEqual(payload["response_format"], {"type": "json_object"})[m
+ [m
+     def test_gemini_request_shape(self):[m
+         response = {"candidates": [{"content": {"parts": [{"text": '{"ok": true}'}]}}]}[m
+[36m@@ -61,7 +85,7 @@[m [mclass LLMClientTests(unittest.TestCase):[m
+             {"role": "user", "content": "Return JSON."},[m
+         ][m
+         with patch.dict(os.environ, {"LLM_PROVIDER": "gemini", "GEMINI_API_KEY": "secret", "LLM_MODEL": "gemini-model"}, clear=True):[m
+[31m-            with patch("agent.llm_client.urllib.request.urlopen", return_value=FakeResponse(response)) as request:[m
+[32m+[m[32m            with patch("agent.llm_client.urlopen", return_value=FakeResponse(response)) as request:[m
+                 result = llm_client.complete(messages, json_mode=True)[m
+ [m
+         payload = json.loads(request.call_args.args[0].data.decode("utf-8"))[m
+[36m@@ -82,7 +106,7 @@[m [mclass LLMClientTests(unittest.TestCase):[m
+         response = {"message": {"content": "ok"}}[m
+         with patch.dict(os.environ, {"LLM_PROVIDER": "ollama"}, clear=True):[m
+             with patch([m
+[31m-                "agent.llm_client.urllib.request.urlopen",[m
+[32m+[m[32m                "agent.llm_client.urlopen",[m
+                 side_effect=[FakeResponse({}, 503), FakeResponse(response)],[m
+             ) as request:[m
+                 self.assertEqual(llm_client.complete(self.messages), "ok")[m
+[36m@@ -92,7 +116,7 @@[m [mclass LLMClientTests(unittest.TestCase):[m
+         response = {"message": {"content": "ok"}}[m
+         with patch.dict(os.environ, {"LLM_PROVIDER": "ollama"}, clear=True):[m
+             with patch([m
+[31m-                "agent.llm_client.urllib.request.urlopen",[m
+[32m+[m[32m                "agent.llm_client.urlopen",[m
+                 side_effect=[TimeoutError(), FakeResponse(response)],[m
+             ) as request:[m
+                 self.assertEqual(llm_client.complete(self.messages), "ok")[m
+[36m@@ -101,7 +125,7 @@[m [mclass LLMClientTests(unittest.TestCase):[m
+     def test_does_not_retry_client_failure_and_does_not_expose_key(self):[m
+         error = urllib.error.HTTPError("http://provider", 401, "bad", {}, None)[m
+         with patch.dict(os.environ, {"LLM_PROVIDER": "groq", "GROQ_API_KEY": "secret-key"}, clear=True):[m
+[31m-            with patch("agent.llm_client.urllib.request.urlopen", side_effect=error) as request:[m
+[32m+[m[32m            with patch("agent.llm_client.urlopen", side_effect=error) as request:[m
+                 with self.assertRaises(llm_client.LLMError) as raised:[m
+                     llm_client.complete(self.messages)[m
+         self.assertEqual(request.call_count, 1)[m
