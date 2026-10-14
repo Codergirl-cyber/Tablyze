@@ -44,18 +44,29 @@ class AgentInvestigationTests(unittest.TestCase):
         self.assertEqual(len(result["investigation"]), 1)
 
     def test_malformed_decision_retries_once(self):
-        llm = ScriptedLLM(
-            [
-                "not json",
-                {"action": "finish", "reason": "The answer is already supported."},
-                {"answer": "No tool was needed.", "evidence": []},
-            ]
-        )
-
-        result = agent.investigate("Is there anything to inspect?", self.dataframe, llm)
+        responses = [
+            "not json",
+            json.dumps(
+                {"action": "complete", "reason": "The summary is sufficient."}
+            ),
+            json.dumps({"answer": "No tool was needed.", "evidence": []}),
+        ]
+        with patch.object(
+            agent.llm_client,
+            "complete",
+            side_effect=responses,
+        ) as complete:
+            result = agent.investigate(
+                "Is there anything to inspect?",
+                self.dataframe,
+            )
 
         self.assertEqual(result["tools_used"], [])
-        self.assertIn("Return valid JSON only", llm.messages[1][1]["content"])
+        first_messages = complete.call_args_list[0].args[0]
+        retry_messages = complete.call_args_list[1].args[0]
+        self.assertIn("Return one plain JSON object", first_messages[0]["content"])
+        self.assertIn("plain JSON object as text", retry_messages[-1]["content"])
+        self.assertNotIn("repo.run_tool", first_messages[0]["content"])
 
     def test_next_decision_receives_prior_actual_result(self):
         llm = ScriptedLLM(
@@ -141,6 +152,68 @@ class AgentInvestigationTests(unittest.TestCase):
             result = agent.investigate("Profile this dataset.", self.dataframe)
 
         self.assertEqual(result["tools_used"], ["profile_dataset"])
+
+    def test_recovers_groq_rejected_gpt_oss_tool_call(self):
+        provider_error = {
+            "error": {
+                "code": "tool_use_failed",
+                "failed_generation": json.dumps(
+                    {
+                        "name": "repo.run_tool",
+                        "arguments": {
+                            "action": "run_tool",
+                            "tool": "get_correlations",
+                            "reason": "Inspect correlations.",
+                        },
+                    }
+                ),
+            }
+        }
+        error = agent.LLMError(
+            "Groq rejected a tool-call-formatted response.",
+            status_code=400,
+            response_body=json.dumps(provider_error),
+        )
+
+        responses = [
+            error,
+            json.dumps({"action": "complete", "reason": "Analysis is complete."}),
+            json.dumps(
+                {
+                    "answer": "Correlations have been checked.",
+                    "evidence": [],
+                }
+            ),
+        ]
+        with patch.object(agent.llm_client, "complete", side_effect=responses):
+            result = agent.investigate("Find correlations.", self.dataframe)
+
+        self.assertEqual(result["tools_used"], ["get_correlations"])
+
+    def test_does_not_recover_unregistered_groq_tool_call(self):
+        provider_error = {
+            "error": {
+                "code": "tool_use_failed",
+                "failed_generation": json.dumps(
+                    {
+                        "name": "repo.run_tool",
+                        "arguments": {
+                            "action": "run_tool",
+                            "tool": "execute_python",
+                        },
+                    }
+                ),
+            }
+        }
+        error = agent.LLMError(
+            "Groq rejected a tool-call-formatted response.",
+            status_code=400,
+            response_body=json.dumps(provider_error),
+        )
+
+        with patch.object(agent.llm_client, "complete", side_effect=error):
+            with self.assertRaises(agent.LLMError):
+                agent.decide_next_action("Inspect the dataset.", {"rows": 3}, [])
 
     def test_finish_without_tool_uses_dataset_summary(self):
         responses = [
