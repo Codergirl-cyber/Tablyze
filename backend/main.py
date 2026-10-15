@@ -1,17 +1,22 @@
 import os
 import io
+import sys
 import logging
 from pathlib import Path
 
+# Ensure the backend directory is in sys.path for serverless and nested imports
+BACKEND_DIR = Path(__file__).resolve().parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env", override=False)
+load_dotenv(dotenv_path=BACKEND_DIR / ".env", override=False)
 
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
-import os
 from pydantic import BaseModel, Field
 from cache import RedisCache
 from analysis import analyze_dataframe
