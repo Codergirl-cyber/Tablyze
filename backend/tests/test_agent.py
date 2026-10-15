@@ -113,6 +113,51 @@ class AgentInvestigationTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, "tool_failure")
         self.assertNotIn("private details", str(raised.exception))
 
+    def test_llm_failure_is_reported_as_unavailable(self):
+        with patch.object(
+            agent.llm_client,
+            "complete",
+            side_effect=agent.LLMError("provider rejected the request"),
+        ):
+            with self.assertRaises(agent.AgentError) as raised:
+                agent.investigate("Inspect this data.", self.dataframe)
+
+        self.assertEqual(raised.exception.code, "llm_unavailable")
+
+    def test_malformed_decision_retries_and_completes(self):
+        responses = [
+            "not json",
+            json.dumps(
+                {
+                    "action": "run_tool",
+                    "tool": "profile_dataset",
+                    "reason": "Profile the uploaded data.",
+                }
+            ),
+            json.dumps({"action": "finish", "reason": "Analysis is complete."}),
+            json.dumps({"answer": "The dataset is profiled.", "evidence": []}),
+        ]
+        with patch.object(agent.llm_client, "complete", side_effect=responses):
+            result = agent.investigate("Profile this dataset.", self.dataframe)
+
+        self.assertEqual(result["tools_used"], ["profile_dataset"])
+
+    def test_finish_without_tool_uses_dataset_summary(self):
+        responses = [
+            json.dumps({"action": "finish", "reason": "Summary is sufficient."}),
+            json.dumps(
+                {
+                    "answer": "The dataset has three rows.",
+                    "evidence": [],
+                }
+            ),
+        ]
+        with patch.object(agent.llm_client, "complete", side_effect=responses):
+            result = agent.investigate("How many rows are there?", self.dataframe)
+
+        self.assertEqual(result["answer"], "The dataset has three rows.")
+        self.assertEqual(result["tools_used"], [])
+
     def test_evidence_must_reference_an_executed_tool(self):
         llm = ScriptedLLM(
             [

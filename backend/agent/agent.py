@@ -1,4 +1,4 @@
-"""Minimal Data Agent: plan tools, execute, synthesize evidence-backed answers."""
+"""Data Agent for investigating questions about uploaded datasets."""
 
 from __future__ import annotations
 
@@ -8,10 +8,13 @@ import os
 import re
 from typing import Any
 
+import pandas as pd
+
 from analysis import analyze_dataframe
-from agent import llm_client
-from agent.llm import LLMError, LLMProvider
-from agent.tools import REGISTERED_TOOLS, TOOL_DESCRIPTIONS, run_tool
+from . import llm_client
+from .llm_client import LLMError
+from .tools import REGISTERED_TOOLS, TOOL_DESCRIPTIONS, run_tool
+
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +22,30 @@ MAX_AGENT_STEPS = max(1, int(os.getenv("MAX_AGENT_STEPS", "5")))
 
 
 class AgentError(Exception):
-    def __init__(self, message: str, *, code: str = "agent_error"):
+    """Error raised during agent investigation."""
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "agent_error",
+    ) -> None:
         super().__init__(message)
+        self.message = message
         self.code = code
 
 
 def _parse_json_object(text: str) -> dict[str, Any]:
+    """Parse a JSON object, even if extra text surrounds it."""
+
+    if not isinstance(text, str) or not text.strip():
+        raise AgentError(
+            "The language model returned an empty response.",
+            code="llm_empty_response",
+        )
+
     text = text.strip()
+
+    # First, try parsing the entire response.
     try:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
@@ -33,193 +53,383 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    match = re.search(r"\{[\s\S]*\}", text)
-    if match:
+    # Remove Markdown code fences.
+    cleaned = re.sub(
+        r"^\s*```(?:json)?\s*|\s*```\s*$",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    try:
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # Try to locate a JSON object inside surrounding text.
+    decoder = json.JSONDecoder()
+
+    for match in re.finditer(r"\{", cleaned):
         try:
-            parsed = json.loads(match.group(0))
+            parsed, _ = decoder.raw_decode(cleaned[match.start():])
+
             if isinstance(parsed, dict):
                 return parsed
+
         except json.JSONDecodeError:
-            pass
-    raise AgentError("LLM returned malformed JSON.", code="llm_malformed_response")
+            continue
+
+    raise AgentError(
+        "The language model returned malformed JSON.",
+        code="llm_malformed_response",
+    )
 
 
-def _result_contains(value: Any, result: Any) -> bool:
-    if value == result:
-        return True
-    if isinstance(result, dict):
-        return any(_result_contains(value, item) for item in result.values())
-    if isinstance(result, list):
-        return any(_result_contains(value, item) for item in result)
-    return False
+def _complete(messages: list[dict[str, str]]) -> str:
+    """Request a response from the configured LLM."""
+
+    try:
+        return llm_client.complete(messages, json_mode=True)
+
+    except LLMError:
+        logger.exception("LLM request failed.")
+        raise
+
+    except Exception as exc:
+        logger.exception("Unexpected LLM error.")
+
+        raise AgentError(
+            "The language model request failed.",
+            code="llm_request_failed",
+        ) from exc
+
+
+def _tool_descriptions() -> str:
+    """Return the registered tool descriptions as JSON."""
+
+    return json.dumps(
+        TOOL_DESCRIPTIONS,
+        ensure_ascii=False,
+        default=str,
+    )
 
 
 def decide_next_action(
     question: str,
-    steps: list[dict[str, Any]],
-    llm: LLMProvider | None = None,
-) -> dict[str, str]:
-    tool_lines = "\n".join(
-        f"- {name}: {desc}" for name, desc in TOOL_DESCRIPTIONS.items()
-    )
-    system = (
-        "You are an iterative data investigator. Choose exactly one next action using the "
-        "actual prior tool results, or finish if the evidence is sufficient. Use only the "
-        "available tools. Respond with JSON only, in one of these forms: "
-        '{"action":"run_tool","tool":"tool_name","reason":"..."} or '
-        '{"action":"finish","reason":"..."}.'
-    )
-    user = (
-        f"Original question:\n{question}\n\n"
-        f"Available tools:\n{tool_lines}\n\n"
-        f"Previous investigation steps and actual results (JSON):\n"
-        f"{json.dumps(steps, default=str)}\n"
-    )
+    dataframe_summary: dict[str, Any],
+    previous_steps: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Ask the LLM to select the next registered analysis tool."""
+
     messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
+        {
+            "role": "system",
+            "content": (
+                "You are a data-analysis planning assistant.\n"
+                "You must return one valid JSON object only.\n"
+                "Do not call functions or tools yourself.\n"
+                "Choose tools only from the supplied available_tools.\n"
+                'To execute a tool, return: '
+                '{"action":"run_tool","tool":"TOOL_NAME",'
+                '"reason":"short explanation"}\n'
+                'When no further analysis is necessary, return: '
+                '{"action":"finish","reason":"short explanation"}\n'
+                "Do not invent tool names.\n"
+                "Avoid repeating a tool that has already produced "
+                "a successful result unless additional analysis is needed."
+            ),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "question": question,
+                    "dataframe_summary": dataframe_summary,
+                    "previous_steps": previous_steps,
+                    "available_tools": _tool_descriptions(),
+                },
+                ensure_ascii=False,
+                default=str,
+            ),
+        },
     ]
 
-    def complete(current_messages: list[dict[str, str]]) -> str:
-        if llm is not None:
-            return llm.chat(current_messages, json_mode=True)
-        return llm_client.complete(current_messages, json_mode=True)
+    for attempt in range(2):
+        response = _complete(messages)
 
-    raw = complete(messages)
-    try:
-        payload = _parse_json_object(raw)
-    except AgentError as exc:
-        if exc.code != "llm_malformed_response":
-            raise
-        retry_messages = [*messages]
-        retry_messages[1] = {
-            "role": "user",
-            "content": f"{user}\n\nReturn valid JSON only. Do not include markdown or commentary.",
-        }
-        payload = _parse_json_object(complete(retry_messages))
-    action = payload.get("action")
-    reason = payload.get("reason")
-    if action not in {"run_tool", "finish"} or not isinstance(reason, str) or not reason.strip():
-        raise AgentError("LLM returned an invalid investigation decision.", code="llm_malformed_response")
-    if action == "finish":
-        return {"action": action, "reason": reason.strip()}
+        try:
+            action = _parse_json_object(response)
+            action_type = action.get("action")
 
-    tool_name = payload.get("tool")
-    if not isinstance(tool_name, str) or tool_name not in REGISTERED_TOOLS:
-        raise AgentError("LLM requested an unavailable analysis tool.", code="invalid_tool_selection")
-    return {"action": action, "tool": tool_name, "reason": reason.strip()}
+            if action_type == "finish":
+                return action
+
+            if action_type != "run_tool":
+                raise AgentError(
+                    "The language model returned an invalid action.",
+                    code="llm_invalid_action",
+                )
+
+            tool_name = action.get("tool")
+            if (
+                not isinstance(tool_name, str)
+                or tool_name not in REGISTERED_TOOLS
+            ):
+                raise AgentError(
+                    "The language model selected an unknown tool.",
+                    code="llm_invalid_tool",
+                )
+
+            return action
+        except AgentError as exc:
+            retryable_codes = {
+                "llm_empty_response",
+                "llm_malformed_response",
+                "llm_invalid_action",
+                "llm_invalid_tool",
+            }
+            if attempt == 1 or exc.code not in retryable_codes:
+                raise
+
+            messages.extend(
+                [
+                    {"role": "assistant", "content": response},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Your previous response could not be used: "
+                            f"{exc}. Return valid JSON only, using exactly "
+                            "the required action format and a tool from "
+                            "available_tools."
+                        ),
+                    },
+                ]
+            )
+
+    raise AgentError(
+        "The language model returned an invalid action.",
+        code="llm_invalid_action",
+    )
 
 
 def synthesize_answer(
     question: str,
+    dataframe_summary: dict[str, Any],
     tool_outputs: list[dict[str, Any]],
-    llm: LLMProvider,
 ) -> dict[str, Any]:
-    system = (
-        "You are a data analyst. Answer ONLY using the tool results provided. "
-        "Do not invent numbers, correlations, or column names. "
-        "If evidence is insufficient, say so. "
-        "Respond with JSON: "
-        '{"answer": "...", "evidence": [{"finding": "...", "source": "tool_name", "value": ...}]}. '
-        "Each evidence item must cite a tool from tools_used and use values present in the results."
-    )
-    user = (
-        f"Question: {question}\n\n"
-        f"Tool results (JSON):\n{json.dumps(tool_outputs, default=str)}\n"
-    )
+    """Generate a final answer based on the available analysis results."""
+
     messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
+        {
+            "role": "system",
+            "content": (
+                "You are a careful data analyst.\n"
+                "Answer the user's question using only the supplied "
+                "dataset summary and analysis tool results.\n"
+                "Do not invent statistics or findings.\n"
+                "Return one valid JSON object with this structure:\n"
+                '{"answer":"your answer","evidence":'
+                '[{"source":"tool name","finding":"supported finding"}]}\n'
+                "If evidence is insufficient, explain the limitation.\n"
+                "Do not call functions or tools yourself."
+            ),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "question": question,
+                    "dataframe_summary": dataframe_summary,
+                    "tool_outputs": tool_outputs,
+                },
+                ensure_ascii=False,
+                default=str,
+            ),
+        },
     ]
-    raw = llm.chat(messages, json_mode=True) if llm is not None else llm_client.complete(messages, json_mode=True)
-    payload = _parse_json_object(raw)
-    answer = payload.get("answer")
-    evidence = payload.get("evidence")
-    if not isinstance(answer, str) or not answer.strip():
-        raise AgentError("LLM did not produce an answer.", code="llm_malformed_response")
+
+    response = _complete(messages)
+    result = _parse_json_object(response)
+
+    answer = result.get("answer")
+    evidence = result.get("evidence", [])
+
+    if not isinstance(answer, str):
+        raise AgentError(
+            "The language model returned an invalid answer.",
+            code="llm_invalid_answer",
+        )
+
     if not isinstance(evidence, list):
         evidence = []
-    available_tools = {output["tool"] for output in tool_outputs}
-    cleaned_evidence: list[dict[str, Any]] = []
+
+    valid_evidence: list[dict[str, str]] = []
+
     for item in evidence:
-        if (
-            isinstance(item, dict)
-            and item.get("finding")
-            and isinstance(item.get("source"), str)
-            and item["source"] in available_tools
-            and (
-                "value" not in item
-                or any(
-                    output["tool"] == item["source"]
-                    and _result_contains(item["value"], output["result"])
-                    for output in tool_outputs
-                )
-            )
-        ):
-            cleaned_evidence.append(
+        if not isinstance(item, dict):
+            continue
+
+        source = item.get("source")
+        finding = item.get("finding")
+
+        if isinstance(source, str) and isinstance(finding, str):
+            valid_evidence.append(
                 {
-                    "finding": str(item["finding"]),
-                    "source": str(item["source"]),
-                    "value": item.get("value"),
+                    "source": source,
+                    "finding": finding,
                 }
             )
-    return {"answer": answer.strip(), "evidence": cleaned_evidence}
-
-
-def _step_summary(result: dict[str, Any]) -> str:
-    summary = json.dumps(result.get("result", {}), ensure_ascii=True, default=str)
-    if len(summary) > 240:
-        return summary[:237] + "..."
-    return summary
-
-
-def investigate(question: str, dataframe, llm: LLMProvider | None = None) -> dict[str, Any]:
-    q = (question or "").strip()
-    if not q:
-        raise AgentError("Question must not be empty.", code="invalid_question")
-    if dataframe is None or len(dataframe.index) == 0:
-        raise AgentError("Dataset is empty.", code="empty_dataset")
-
-    steps: list[dict[str, Any]] = []
-    try:
-        analysis = analyze_dataframe(dataframe)
-        for _ in range(MAX_AGENT_STEPS):
-            decision = decide_next_action(q, steps, llm)
-            if decision["action"] == "finish":
-                break
-            tool_name = decision["tool"]
-            try:
-                result = run_tool(tool_name, dataframe, analysis)
-            except Exception as exc:
-                logger.exception("Tool execution failed: %s", tool_name)
-                raise AgentError(
-                    "An analysis tool failed while processing the dataset.",
-                    code="tool_failure",
-                ) from exc
-            steps.append({"tool": tool_name, "reason": decision["reason"], "result": result})
-
-        reached_limit = len(steps) == MAX_AGENT_STEPS
-        synthesis = synthesize_answer(q, [step["result"] for step in steps], llm)
-    except LLMError as exc:
-        raise AgentError(str(exc), code="llm_unavailable") from exc
-
-    answer = synthesis["answer"]
-    if reached_limit:
-        answer += f"\n\nInvestigation limit reached ({MAX_AGENT_STEPS} steps); this answer uses the evidence collected so far."
 
     return {
-        "question": q,
         "answer": answer,
-        "evidence": synthesis["evidence"],
-        "tools_used": [step["tool"] for step in steps],
-        "tool_results": [step["result"] for step in steps],
-        "investigation": [
-            {
-                "step": index,
-                "tool": step["tool"],
-                "reason": step["reason"],
-                "summary": _step_summary(step["result"]),
-            }
-            for index, step in enumerate(steps, start=1)
-        ],
+        "evidence": valid_evidence,
     }
+
+
+def investigate(
+    question: str,
+    dataframe: Any,
+) -> dict[str, Any]:
+    """Investigate a question about a dataframe using registered tools."""
+
+    if not isinstance(question, str) or not question.strip():
+        raise AgentError(
+            "Please provide a question.",
+            code="invalid_question",
+        )
+
+    if dataframe is None:
+        raise AgentError(
+            "No dataset is available for analysis.",
+            code="missing_dataframe",
+        )
+
+    if not isinstance(dataframe, pd.DataFrame):
+        raise AgentError(
+            "The uploaded dataset is not a valid DataFrame.",
+            code="invalid_dataframe",
+        )
+
+    question = question.strip()
+
+    try:
+        # Calculate dataset analysis once and reuse it for every tool.
+        dataframe_summary = analyze_dataframe(dataframe)
+
+        steps: list[dict[str, Any]] = []
+
+        for step_number in range(MAX_AGENT_STEPS):
+            action = decide_next_action(
+                question=question,
+                dataframe_summary=dataframe_summary,
+                previous_steps=steps,
+            )
+
+            if action.get("action") == "finish":
+                logger.info(
+                    "Agent finished investigation: %s",
+                    action.get("reason", ""),
+                )
+                break
+
+            tool_name = action["tool"]
+            reason = action.get("reason", "")
+
+            logger.info(
+                "Running agent tool %s (step %s/%s)",
+                tool_name,
+                step_number + 1,
+                MAX_AGENT_STEPS,
+            )
+
+            try:
+                # IMPORTANT:
+                # run_tool requires three arguments:
+                # tool name, DataFrame, and precomputed analysis.
+                tool_result = run_tool(
+                    tool_name,
+                    dataframe,
+                    dataframe_summary,
+                )
+
+                steps.append(
+                    {
+                        "tool": tool_name,
+                        "reason": reason,
+                        "result": tool_result,
+                    }
+                )
+
+            except Exception as exc:
+                logger.exception(
+                    "Tool execution failed: %s",
+                    tool_name,
+                )
+
+                steps.append(
+                    {
+                        "tool": tool_name,
+                        "reason": reason,
+                        "error": str(exc),
+                    }
+                )
+
+        # Only pass the collected tool outputs to the answer generator.
+        tool_outputs = [
+            {
+                "tool": step["tool"],
+                "result": step.get("result"),
+                "error": step.get("error"),
+            }
+            for step in steps
+        ]
+
+        # Avoid asking the LLM to invent an answer when no tool succeeded.
+        successful_steps = [
+            step for step in steps if "result" in step
+        ]
+
+        if steps and not successful_steps:
+            raise AgentError(
+                "The investigation could not produce any successful "
+                "analysis results. Check the backend logs.",
+                code="no_successful_tools",
+            )
+
+        final_result = synthesize_answer(
+            question=question,
+            dataframe_summary=dataframe_summary,
+            tool_outputs=tool_outputs,
+        )
+
+        return {
+            "question": question,
+            "answer": final_result["answer"],
+            "evidence": final_result["evidence"],
+            "tools_used": [
+                step["tool"] for step in successful_steps
+            ],
+            "tool_results": tool_outputs,
+            "investigation": steps,
+        }
+
+    except LLMError as exc:
+        logger.exception("LLM error during investigation.")
+
+        raise AgentError(
+            "The language model request failed. Check the backend logs.",
+            code="llm_unavailable",
+        ) from exc
+
+    except AgentError:
+        raise
+
+    except Exception as exc:
+        logger.exception("Investigation failed.")
+
+        raise AgentError(
+            "The investigation failed. Check the backend logs.",
+            code="investigation_failed",
+        ) from exc
