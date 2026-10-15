@@ -91,6 +91,8 @@ http://localhost:8000
 ## Frontend Setup
 
 ```bash
+cd frontend
+
 npm install
 npm run dev
 ```
@@ -105,7 +107,7 @@ http://localhost:3000
 
 ## Environment Variables
 
-Create a `.env` file inside the backend folder.
+Create a `.env` file inside the backend folder (see `backend/.env.example`).
 
 ```env
 GROQ_API_KEY=your_api_key_here
@@ -118,15 +120,30 @@ GROQ_API_KEY=your_api_key_here
 ```
 tablyze/
 │
-├── app/
-├── components/
+├── frontend/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── components/
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── public/
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── next.config.ts
+│
 ├── backend/
+│   ├── agent/
+│   ├── tests/
 │   ├── main.py
+│   ├── analysis.py
+│   ├── cache.py
 │   ├── requirements.txt
+│   ├── pyproject.toml
 │   └── .env
 │
-├── public/
-├── screenshots/
+├── sample.csv
+├── LICENSE
 └── README.md
 ```
 
